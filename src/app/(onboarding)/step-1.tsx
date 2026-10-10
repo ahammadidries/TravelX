@@ -1,5 +1,6 @@
-import { PlaceholderScreen } from '@/screens/shared/PlaceholderScreen';
+import { router } from 'expo-router';
+import PreferenceScreen from '@/screens/travel/PreferenceScreen';
 
 export default function OnboardingStepOneRoute() {
-  return <PlaceholderScreen title="Onboarding" />;
+  return <PreferenceScreen step={1} onContinue={() => router.push('/(onboarding)/step-2')} />;
 }

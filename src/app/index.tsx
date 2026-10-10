@@ -1,5 +1,5 @@
-import { DesignSystemGallery } from '@/screens/designSystem/DesignSystemGallery';
+import CityChoiceScreen from '@/screens/travel/CityChoiceScreen';
 
-export default function DesignSystemPreviewRoute() {
-  return <DesignSystemGallery />;
+export default function EntryRoute() {
+  return <CityChoiceScreen />;
 }

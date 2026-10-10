@@ -11,6 +11,7 @@ import {
   Sora_700Bold,
 } from '@expo-google-fonts/sora';
 import { RootNavigator } from '@/navigation/RootNavigator';
+import { TravelProvider } from '@/state/travelContext';
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -29,7 +30,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <BottomSheetModalProvider>
           <StatusBar style="dark" />
-          <RootNavigator />
+          <TravelProvider>
+            <RootNavigator />
+          </TravelProvider>
         </BottomSheetModalProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>
