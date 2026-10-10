@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Alert,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -11,6 +10,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Alert } from '@/lib/notify';
 import { router } from 'expo-router';
 import TogetherMap from '@/components/TogetherMap';
 import { ActionButton, CityPill, Note } from '@/components/TravelUI';
@@ -34,6 +34,8 @@ type EventRecord = {
   capacity: number;
   cancelled: boolean;
   host_id: string;
+  member_count: number;
+  is_member: boolean;
 };
 type ChatMessage = {
   id: string;
@@ -45,18 +47,24 @@ type ChatMessage = {
 type Member = { user_id: string; rsvp: 'going' | 'maybe' | 'cant'; name?: string };
 type Panel = 'create' | 'details' | 'chat' | null;
 const emojiOptions = ['☕', '🚶', '🍜', '🏖️', '🎨', '🛍️', '🌿', '🎉'];
-const dateLabel = (value: string) =>
+const dateLabel = (value: string, timeZone: string) =>
   new Date(value).toLocaleString([], {
+    timeZone,
     weekday: 'short',
     month: 'short',
     day: 'numeric',
     hour: 'numeric',
     minute: '2-digit',
   });
-const defaultStartTime = () => new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
-const eventsSince = () => new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+const defaultStartTime = (hours: number) =>
+  new Date(Date.now() + hours * 60 * 60 * 1000).toISOString();
 
-export default function TogetherScreen() {
+export default function TogetherRoute() {
+  const { cityKey } = useTravel();
+  const { session } = useAuth();
+  return <TogetherScreen key={cityKey + session?.user.id} />;
+}
+function TogetherScreen() {
   const { city } = useTravel();
   const { session, profile } = useAuth();
   const meta = cities[city.key];
@@ -64,11 +72,16 @@ export default function TogetherScreen() {
   const [counts, setCounts] = useState<Record<string, number>>({});
   const [mine, setMine] = useState<string[]>([]);
   const [loading, setLoading] = useState(isSupabaseConfigured);
-  const [loadError, setLoadError] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [startHours, setStartHours] = useState(2);
+  const mutationLock = useRef(false);
   const [panel, setPanel] = useState<Panel>(null);
   const [selected, setSelected] = useState<EventRecord | null>(null);
   const [members, setMembers] = useState<Member[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [chatError, setChatError] = useState<string | null>(null);
+  const detailsRequest = useRef(0);
+  const chatEvent = useRef<string | null>(null);
   const [draft, setDraft] = useState('');
   const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState('');
@@ -82,51 +95,32 @@ export default function TogetherScreen() {
       .from('travelx_messages')
       .select('*')
       .eq('event_id', id)
-      .order('created_at')
+      .order('created_at', { ascending: false })
       .limit(100);
+    if (chatEvent.current !== id) return;
     if (error) {
-      Alert.alert('Could not load chat', friendlyError(error));
+      setChatError(friendlyError(error));
       return;
     }
-    setMessages((data || []) as unknown as ChatMessage[]);
+    setChatError(null);
+    setMessages(((data || []) as unknown as ChatMessage[]).reverse());
   }, []);
   const loadEvents = useCallback(async () => {
     if (!isSupabaseConfigured) return;
-    const { data, error } = await supabase
-      .from('travelx_events')
-      .select('*')
-      .eq('city', city.key)
-      .eq('cancelled', false)
-      .gte('starts_at', eventsSince())
-      .order('starts_at')
-      .limit(50);
+    const { data, error } = await supabase.rpc('travelx_event_summaries', { p_city: city.key });
     if (error) {
-      setLoadError(true);
+      setLoadError(friendlyError(error));
+      setEvents([]);
       setLoading(false);
       return;
     }
-    setLoadError(false);
-    const rows = (data || []) as unknown as EventRecord[];
+    const rows = (data || []) as EventRecord[];
+    setLoadError(null);
     setEvents(rows);
-    if (rows.length) {
-      const { data: joined } = await supabase
-        .from('travelx_members')
-        .select('event_id,user_id')
-        .in(
-          'event_id',
-          rows.map((e) => e.id),
-        );
-      const memberships = (joined || []) as { event_id: string; user_id: string }[];
-      const grouped: Record<string, number> = {};
-      for (const m of memberships) grouped[m.event_id] = (grouped[m.event_id] || 0) + 1;
-      setCounts(grouped);
-      setMine(memberships.filter((m) => m.user_id === session?.user.id).map((m) => m.event_id));
-    } else {
-      setCounts({});
-      setMine([]);
-    }
+    setCounts(Object.fromEntries(rows.map((e) => [e.id, Number(e.member_count)])));
+    setMine(rows.filter((e) => e.is_member).map((e) => e.id));
     setLoading(false);
-  }, [city.key, session?.user.id]);
+  }, [city.key]);
   // This starts an async database request; its state updates follow the network response.
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -140,7 +134,7 @@ export default function TogetherScreen() {
       .on(
         'postgres_changes',
         {
-          event: 'INSERT',
+          event: '*',
           schema: 'public',
           table: 'travelx_messages',
           filter: `event_id=eq.${activeEventId}`,
@@ -148,19 +142,24 @@ export default function TogetherScreen() {
         () => void loadMessages(activeEventId),
       )
       .subscribe();
+    const refresh = setInterval(() => void loadMessages(activeEventId), 10000);
     return () => {
+      clearInterval(refresh);
       void supabase.removeChannel(channel);
     };
   }, [panel, activeEventId, loadMessages]);
   const selectedIsHost = Boolean(selected && session?.user.id === selected.host_id);
   const isMember = Boolean(selected && mine.includes(selected.id));
   const loadDetails = useCallback(async (event: EventRecord) => {
+    const request = ++detailsRequest.current;
     setSelected(event);
     setPanel('details');
+    setMembers([]);
     const { data } = await supabase
       .from('travelx_members')
       .select('user_id,rsvp')
       .eq('event_id', event.id);
+    if (request !== detailsRequest.current) return;
     const raw = (data || []) as unknown as Member[];
     if (raw.length) {
       const { data: profiles } = await supabase
@@ -171,6 +170,7 @@ export default function TogetherScreen() {
           raw.map((m) => m.user_id),
         );
       const names = (profiles || []) as { id: string; name: string }[];
+      if (request !== detailsRequest.current) return;
       setMembers(
         raw.map((m) => ({ ...m, name: names.find((p) => p.id === m.user_id)?.name || 'Traveler' })),
       );
@@ -184,20 +184,23 @@ export default function TogetherScreen() {
       return;
     }
     setPanel('chat');
+    chatEvent.current = selected.id;
+    setMessages([]);
+    setChatError(null);
     await loadMessages(selected.id);
   };
   const requireLogin = () => {
     if (session) return true;
-    Alert.alert('Sign in to continue', 'Create an account or sign in to join local activities.', [
-      { text: 'Later', style: 'cancel' },
-      { text: 'Sign in', onPress: () => router.push('/(auth)/login') },
-    ]);
+    setPanel(null);
+    router.push('/(auth)/login');
     return false;
   };
   const act = async (name: string, args: Record<string, unknown> = {}) => {
-    if (!requireLogin()) return;
+    if (!requireLogin() || mutationLock.current) return;
+    mutationLock.current = true;
     setBusy(true);
     const { error } = await supabase.rpc(name, args as never);
+    mutationLock.current = false;
     setBusy(false);
     if (error) {
       Alert.alert('Could not complete action', friendlyError(error));
@@ -205,18 +208,19 @@ export default function TogetherScreen() {
     }
     await loadEvents();
     if (selected) {
-      if (name === 'travelx_cancel_event') {
+      if (name === 'travelx_cancel_event' || name === 'travelx_leave_event') {
         setSelected(null);
         setPanel(null);
       } else await loadDetails(selected);
     }
   };
   const create = async () => {
-    if (!requireLogin()) return;
+    if (!requireLogin() || mutationLock.current) return;
     if (title.trim().length < 3) {
       Alert.alert('Add a short activity name', 'Use at least 3 characters.');
       return;
     }
+    mutationLock.current = true;
     setBusy(true);
     const { error } = await supabase.rpc('travelx_create_event', {
       p_city: city.key,
@@ -226,9 +230,10 @@ export default function TogetherScreen() {
       p_location: place.name,
       p_latitude: place.latitude,
       p_longitude: place.longitude,
-      p_starts_at: defaultStartTime(),
+      p_starts_at: defaultStartTime(startHours),
       p_capacity: Math.max(2, Math.min(30, Number(capacity) || 6)),
     });
+    mutationLock.current = false;
     setBusy(false);
     if (error) {
       Alert.alert('Could not create activity', friendlyError(error));
@@ -240,12 +245,14 @@ export default function TogetherScreen() {
     await loadEvents();
   };
   const send = async () => {
-    if (!selected || !draft.trim()) return;
+    if (!selected || !session || !draft.trim() || mutationLock.current) return;
+    mutationLock.current = true;
     const body = draft.trim();
     setDraft('');
     const { error } = await supabase
       .from('travelx_messages')
       .insert({ event_id: selected.id, user_id: session!.user.id, body });
+    mutationLock.current = false;
     if (error) {
       setDraft(body);
       Alert.alert('Message not sent', friendlyError(error));
@@ -302,13 +309,13 @@ export default function TogetherScreen() {
           <View style={styles.empty}>
             <Text style={styles.emptyEmoji}>☕</Text>
             <Text style={styles.emptyTitle}>
-              {loadError ? 'Together is still being set up' : 'No meetups yet'}
+              {loadError ? 'Activities are unavailable' : 'Be the first to say hello'}
             </Text>
             <Text style={styles.emptyCopy}>
               {!isSupabaseConfigured
-                ? 'Add the Supabase project URL and publishable key to .env.local, then restart Expo.'
+                ? 'Activities will be available soon. Your city guide is ready to explore.'
                 : loadError
-                  ? 'Run the SQL migration in supabase/migrations to enable Together.'
+                  ? loadError
                   : `Create a small public meetup in ${city.name}. You choose the place and who can join.`}
             </Text>
             {!loadError && isSupabaseConfigured ? (
@@ -324,6 +331,13 @@ export default function TogetherScreen() {
             ) : null}
           </View>
         ) : null}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => void loadEvents()}
+          style={styles.createLink}
+        >
+          <Text style={styles.createLinkText}>Refresh activities</Text>
+        </Pressable>
         <ScrollView contentContainerStyle={styles.eventList} showsVerticalScrollIndicator={false}>
           {displayEvents.map((event) => (
             <Pressable
@@ -339,10 +353,11 @@ export default function TogetherScreen() {
                   {event.title}
                 </Text>
                 <Text numberOfLines={1} style={styles.eventMeta}>
-                  {dateLabel(event.starts_at)} · {event.location}
+                  {dateLabel(event.starts_at, meta.timezone)} · {event.location}
                 </Text>
                 <Text style={styles.eventMeta}>
-                  {counts[event.id] || 0} going · {event.capacity} spots
+                  {counts[event.id] || 0} members ·{' '}
+                  {Math.max(0, event.capacity - (counts[event.id] || 0))} spots left
                 </Text>
               </View>
               <Text style={styles.eventArrow}>›</Text>
@@ -435,8 +450,25 @@ export default function TogetherScreen() {
                     </Pressable>
                   ))}
                 </View>
-                <Text style={styles.helper}>Starts in about 2 hours · {city.name} local time</Text>
+                <Text style={styles.formLabel}>WHEN</Text>
+                <View style={styles.capRow}>
+                  {[1, 2, 24].map((hours) => (
+                    <Pressable
+                      key={hours}
+                      onPress={() => setStartHours(hours)}
+                      style={[styles.capChip, startHours === hours && styles.capSelected]}
+                    >
+                      <Text style={styles.capText}>
+                        {hours === 24 ? 'In 24 hours' : `In ${hours}h`}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+                <Text style={styles.helper}>
+                  All activity times are shown in {city.name} local time.
+                </Text>
                 <ActionButton
+                  disabled={busy}
                   label={busy ? 'Creating…' : 'Create activity'}
                   onPress={() => void create()}
                 />
@@ -447,13 +479,14 @@ export default function TogetherScreen() {
                 <Text style={styles.detailsEmoji}>{selected.emoji}</Text>
                 <Text style={styles.detailsTitle}>{selected.title}</Text>
                 <Text style={styles.detailsMeta}>
-                  {dateLabel(selected.starts_at)} · {selected.location}
+                  {dateLabel(selected.starts_at, meta.timezone)} · {selected.location}
                 </Text>
                 {selected.description ? (
                   <Text style={styles.description}>{selected.description}</Text>
                 ) : null}
                 <Text style={styles.memberCount}>
-                  {members.length} participant{members.length === 1 ? '' : 's'}
+                  {counts[selected.id] || members.length} members
+                  {!isMember ? ' · Join to meet the group' : ''}
                 </Text>
                 {members.map((member) => (
                   <View key={member.user_id} style={styles.memberRow}>
@@ -563,6 +596,7 @@ export default function TogetherScreen() {
                   </>
                 ) : (
                   <ActionButton
+                    disabled={busy}
                     label={busy ? 'Joining…' : 'Join activity'}
                     onPress={() => void act('travelx_join_event', { p_event: selected.id })}
                   />
@@ -572,6 +606,11 @@ export default function TogetherScreen() {
             ) : null}
             {panel === 'chat' && selected ? (
               <>
+                {chatError ? (
+                  <Text accessibilityRole="alert" style={styles.helper}>
+                    {chatError}
+                  </Text>
+                ) : null}
                 <ScrollView style={styles.messageList} contentContainerStyle={{ gap: 9 }}>
                   {messages.map((message) => (
                     <View
@@ -581,6 +620,10 @@ export default function TogetherScreen() {
                         message.user_id === session?.user.id && styles.myBubble,
                       ]}
                     >
+                      <Text style={styles.pinText}>
+                        {message.pinned ? 'Pinned · ' : ''}
+                        {members.find((m) => m.user_id === message.user_id)?.name || 'Traveler'}
+                      </Text>
                       <Text style={styles.bubbleText}>{message.body}</Text>
                       <Text style={styles.messageTime}>
                         {new Date(message.created_at).toLocaleTimeString([], {

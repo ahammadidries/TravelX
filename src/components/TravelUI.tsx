@@ -43,20 +43,26 @@ export function ActionButton({
   onPress,
   secondary = false,
   light = false,
+  disabled = false,
 }: {
   label: string;
   onPress: () => void;
   secondary?: boolean;
   light?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={({ pressed }) => [
         styles.action,
         secondary && styles.secondaryAction,
         light && secondary && styles.lightSecondary,
         pressed && styles.pressed,
+        disabled && styles.pressed,
       ]}
     >
       <Text
@@ -157,7 +163,15 @@ export function Note({ children }: PropsWithChildren) {
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: colors.background },
   dark: { backgroundColor: '#101012' },
-  page: { flexGrow: 1, paddingHorizontal: 24, paddingTop: 14, paddingBottom: 30 },
+  page: {
+    flexGrow: 1,
+    paddingHorizontal: 24,
+    paddingTop: 14,
+    paddingBottom: 30,
+    width: '100%',
+    maxWidth: 680,
+    alignSelf: 'center',
+  },
   brand: { color: colors.textPrimary, fontFamily: fontFamily.bold, fontSize: 20, marginBottom: 30 },
   headingBlock: { gap: 8, marginBottom: 24 },
   heading: { color: colors.textPrimary, fontFamily: fontFamily.bold, fontSize: 27, lineHeight: 36 },

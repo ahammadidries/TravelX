@@ -40,7 +40,7 @@ export function AuthProvider({ children }: PropsWithChildren) {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, next) => {
       setSession(next);
-      setProfile(null);
+      setProfile((current) => (current?.id === next?.user.id ? current : null));
     });
     const listener = AppState.addEventListener('change', (state) => {
       if (Platform.OS !== 'web') {

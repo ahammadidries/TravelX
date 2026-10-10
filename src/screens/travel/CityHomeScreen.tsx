@@ -1,6 +1,8 @@
 import { router } from 'expo-router';
 import { Image } from 'expo-image';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert } from '@/lib/notify';
+import { useCatalog } from '@/state/CatalogContext';
 import {
   ActionButton,
   Brand,
@@ -18,14 +20,15 @@ import { fontFamily } from '@/theme/typography';
 export default function CityHomeScreen() {
   const { city, savedCities, toggleSavedCity } = useTravel();
   const { session } = useAuth();
+  const { apps } = useCatalog();
   const saved = savedCities.includes(city.key);
   const togglePack = async () => {
     try {
       await toggleSavedCity();
     } catch {
       Alert.alert(
-        'Saved on this device',
-        'Sync to your account will finish after the city pack tables are installed.',
+        'Could not sync your changes',
+        'Open Saved to retry when your connection is ready.',
       );
     }
   };
@@ -38,7 +41,7 @@ export default function CityHomeScreen() {
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Account"
-            onPress={() => router.push('/(auth)/login')}
+            onPress={() => router.push(session ? '/(main)/profile' : '/(auth)/login')}
             style={styles.account}
           >
             <Text style={styles.accountText}>{session?.user.email?.[0]?.toUpperCase() ?? '○'}</Text>
@@ -56,7 +59,10 @@ export default function CityHomeScreen() {
         </View>
         <Heading title={`${city.greeting}, ${city.name}`} subtitle={city.tagline} />
       </View>
-      <ActionButton label="I just landed" onPress={() => router.push('/(onboarding)/step-1')} />
+      <ActionButton
+        label="I just landed"
+        onPress={() => router.push('/(main)/guide?section=airport')}
+      />
       <View style={styles.section}>
         <SectionTitle
           trailing={
@@ -97,7 +103,7 @@ export default function CityHomeScreen() {
         <RowCard
           icon="▦"
           title="Local apps"
-          detail="12 researched local services"
+          detail={`${apps.filter((app) => app.city === city.key).length} useful services for ${city.name}`}
           onPress={() => router.push('/(main)/apps')}
         />
         <RowCard
@@ -116,6 +122,12 @@ export default function CityHomeScreen() {
       </View>
       <View style={styles.section}>
         <SectionTitle>Quick essentials</SectionTitle>
+        <RowCard
+          icon="⚙"
+          title="Your travel setup"
+          detail="Language, phone, payments and access preferences"
+          onPress={() => router.push('/(onboarding)/step-1')}
+        />
         <RowCard
           icon="🏛️"
           title="About & information sources"

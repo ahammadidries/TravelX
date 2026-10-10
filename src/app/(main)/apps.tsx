@@ -1,25 +1,42 @@
 import { useMemo, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert } from '@/lib/notify';
 import { CityPill, Heading, Note, Page } from '@/components/TravelUI';
-import { categories, localApps, type AppCategory, type LocalApp } from '@/data/apps';
+import { categories, type AppCategory, type LocalApp } from '@/data/apps';
+import { useCatalog } from '@/state/CatalogContext';
 import { checkedOn } from '@/data/cities';
 import { openLink } from '@/lib/links';
 import { useTravel } from '@/state/travelContext';
 import { colors } from '@/theme/colors';
 import { fontFamily } from '@/theme/typography';
 
-export default function AppsScreen() {
+export default function AppsRoute() {
+  const { cityKey } = useTravel();
+  const { category, app } = useLocalSearchParams<{ category?: string; app?: string }>();
+  return (
+    <AppsScreen key={`${cityKey}:${category}:${app}`} initialCategory={category} initialApp={app} />
+  );
+}
+function AppsScreen({
+  initialCategory,
+  initialApp,
+}: {
+  initialCategory?: string;
+  initialApp?: string;
+}) {
+  const { apps: localApps, source } = useCatalog();
   const { city, cityKey, savedAppIds, toggleSavedApp } = useTravel();
-  const params = useLocalSearchParams<{ category?: string }>();
   const [manualCategory, setManualCategory] = useState<AppCategory | null>(null);
   const category =
     manualCategory ||
-    (categories.includes(params.category as AppCategory)
-      ? (params.category as AppCategory)
+    (categories.includes(initialCategory as AppCategory)
+      ? (initialCategory as AppCategory)
       : 'Transport');
   const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<LocalApp | null>(null);
+  const [selected, setSelected] = useState<LocalApp | null>(
+    () => localApps.find((x) => x.id === initialApp && x.city === cityKey) || null,
+  );
   const data = useMemo(
     () =>
       localApps.filter(
@@ -29,15 +46,15 @@ export default function AppsScreen() {
           (!query.trim() ||
             `${x.name} ${x.purpose} ${x.tip}`.toLowerCase().includes(query.toLowerCase())),
       ),
-    [cityKey, category, query],
+    [cityKey, category, query, localApps],
   );
   const save = async (app: LocalApp) => {
     try {
       await toggleSavedApp(app.id);
     } catch {
       Alert.alert(
-        'Saved on this device',
-        'Account sync will start when the city pack tables are installed.',
+        'Could not sync your changes',
+        'Open Saved to retry when your connection is ready.',
       );
     }
   };
@@ -80,7 +97,8 @@ export default function AppsScreen() {
         ))}
       </View>
       <Text style={styles.resultCount}>
-        {data.length} {data.length === 1 ? 'option' : 'options'} · Checked {checkedOn}
+        {data.length} {data.length === 1 ? 'option' : 'options'} ·{' '}
+        {source === 'supabase' ? 'Updated city catalog' : 'Offline city catalog'}
       </Text>
       {data.map((app) => (
         <View key={app.id} style={styles.card}>
@@ -145,7 +163,7 @@ export default function AppsScreen() {
               </Pressable>
             </View>
             {selected ? (
-              <>
+              <ScrollView>
                 <Text style={styles.selectedName}>{selected.name}</Text>
                 <Text style={styles.selectedDescription}>{selected.purpose}</Text>
                 <InfoLine label="Language" value={selected.language} />
@@ -155,11 +173,13 @@ export default function AppsScreen() {
                   <Text style={styles.tipLabel}>A small local tip</Text>
                   <Text style={styles.tipText}>{selected.tip}</Text>
                 </View>
-                <Text style={styles.source}>Provider information · Reviewed {checkedOn}</Text>
+                <Text style={styles.source}>
+                  Provider information · Reviewed {selected.checked_on || checkedOn}
+                </Text>
                 <Pressable onPress={() => void openLink(selected.url)} style={styles.openButton}>
                   <Text style={styles.openButtonText}>Open provider site ↗</Text>
                 </Pressable>
-              </>
+              </ScrollView>
             ) : null}
           </View>
         </View>
@@ -228,7 +248,7 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontFamily: fontFamily.regular,
   },
-  bookmark: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  bookmark: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   bookmarkText: { fontSize: 21, color: colors.textSecondary },
   bookmarkActive: { color: colors.accent },
   meta: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 11, marginLeft: 56 },
@@ -265,6 +285,7 @@ const styles = StyleSheet.create({
   modalShade: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#0005' },
   dismiss: { flex: 1 },
   sheet: {
+    maxHeight: '90%',
     backgroundColor: '#FFF',
     borderTopLeftRadius: 26,
     borderTopRightRadius: 26,

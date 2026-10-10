@@ -1,5 +1,5 @@
 import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { StyleSheet, Text, View } from 'react-native';
+import { Platform, StyleSheet, Text, View } from 'react-native';
 import type { City } from '@/data/cities';
 
 type EventPin = {
@@ -21,8 +21,9 @@ export default function TogetherMap({
 }) {
   return (
     <MapView
+      key={city.key}
       style={StyleSheet.absoluteFill}
-      provider={PROVIDER_GOOGLE}
+      provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
       initialRegion={{
         latitude: city.latitude,
         longitude: city.longitude,

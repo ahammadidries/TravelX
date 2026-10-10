@@ -1,5 +1,5 @@
 import { Tabs } from 'expo-router';
-import { Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { colors } from '@/theme/colors';
 import { fontFamily } from '@/theme/typography';
 
@@ -23,28 +23,36 @@ export function MainTabs() {
         name="city"
         options={{
           title: 'City',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 19 }}>◫</Text>,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'map' : 'map-outline'} color={color} size={23} />
+          ),
         }}
       />
       <Tabs.Screen
         name="apps"
         options={{
           title: 'Apps',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 19 }}>▦</Text>,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'grid' : 'grid-outline'} color={color} size={23} />
+          ),
         }}
       />
       <Tabs.Screen
         name="together"
         options={{
           title: 'Together',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 19 }}>♧</Text>,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'people' : 'people-outline'} color={color} size={23} />
+          ),
         }}
       />
       <Tabs.Screen
         name="saved"
         options={{
           title: 'Saved',
-          tabBarIcon: ({ color }) => <Text style={{ color, fontSize: 19 }}>♡</Text>,
+          tabBarIcon: ({ color, focused }) => (
+            <Ionicons name={focused ? 'bookmark' : 'bookmark-outline'} color={color} size={23} />
+          ),
         }}
       />
       <Tabs.Screen name="guide" options={{ href: null }} />

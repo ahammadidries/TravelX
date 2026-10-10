@@ -1,90 +1,26 @@
 import { useState } from 'react';
 import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useCatalog } from '@/state/CatalogContext';
 import { CityPill, Heading, Note, Page, RowCard, SectionTitle } from '@/components/TravelUI';
 import { checkedOn } from '@/data/cities';
 import { useTravel } from '@/state/travelContext';
 import { colors } from '@/theme/colors';
 import { fontFamily } from '@/theme/typography';
 
-type Tip = { title: string; text: string; source: string; url: string };
-export default function GuideScreen() {
+export default function GuideRoute() {
   const { city } = useTravel();
-  const [open, setOpen] = useState<string | null>(null);
+  const { section } = useLocalSearchParams<{ section?: string }>();
+  return <GuideScreen key={city.key + section} section={section} />;
+}
+function GuideScreen({ section }: { section?: string }) {
+  const { city, preferences } = useTravel();
+  const { guides } = useCatalog();
+  const tips = guides.filter((t) => t.city === city.key);
+  const [open, setOpen] = useState<string | null>(
+    tips.find((t) => t.section === section)?.id || null,
+  );
   const tokyo = city.key === 'tokyo';
-  const tips: Tip[] = tokyo
-    ? [
-        {
-          title: 'Tickets & trains',
-          text: 'Check routes, station exits, service notices and the last train before setting out. Follow the fare and ticket instructions at the station; ticket products and accepted passes differ by operator.',
-          source: 'Tokyo Metro · Visitor information',
-          url: 'https://www.tokyometro.jp/en/tips/',
-        },
-        {
-          title: 'Taking a taxi',
-          text: 'Use a taxi stand or a taxi app, then confirm the pickup point and destination. Taxi doors are usually operated by the driver. Fare and payment options depend on the vehicle and app.',
-          source: 'GO · Official service information',
-          url: 'https://go.goinc.jp/en/',
-        },
-        {
-          title: 'Paying day to day',
-          text: 'Carry a small amount of yen for places that do not take cards. Contactless and IC-card acceptance varies by shop and service. Tipping is not customary; a polite thank-you is enough.',
-          source: 'Japan National Tourism Organization',
-          url: 'https://www.japan.travel/en/plan/',
-        },
-        {
-          title: 'Local etiquette',
-          text: 'Keep phone calls quiet on trains, queue where marked, and take rubbish with you when bins are not available.',
-          source: 'Tokyo Metro · Consideration on the subway',
-          url: 'https://www.tokyometro.jp/en/tips/considerations/index.html',
-        },
-        {
-          title: 'Useful essentials',
-          text: 'Useful phrases: sumimasen (excuse me), arigatō (thank you). Look for public toilets at stations and larger public facilities. Check your charger label and plug needs before travel.',
-          source: 'JNTO · Travel planning',
-          url: 'https://www.japan.travel/en/plan/',
-        },
-      ]
-    : [
-        {
-          title: 'Trains & buses',
-          text: 'Kozhikode is served by rail and road. Confirm your station or bus boarding point with the operator; local city buses and reserved intercity services use different systems.',
-          source: 'Kozhikode District · How to reach',
-          url: 'https://kozhikode.nic.in/en/tourism/how-to-reach/',
-        },
-        {
-          title: 'Taking a taxi or auto',
-          text: 'Compare an app ride with an official stand or a locally recommended operator. Confirm the destination and fare basis before setting off; availability and payment choices can vary by area.',
-          source: 'Kerala Savaari · Official service',
-          url: 'https://www.keralasavaari.kerala.gov.in/',
-        },
-        {
-          title: 'Paying day to day',
-          text: 'Keep some Indian rupees available. Card and digital payment acceptance varies by shop and neighborhood, so check before ordering or riding.',
-          source: 'Kerala Tourism · Travel tips',
-          url: 'https://www.keralatourism.org/travel-tips/',
-        },
-        {
-          title: 'Local etiquette',
-          text: 'Dress respectfully at religious sites, ask before photographing people, and follow local guidance around places of worship and public spaces.',
-          source: 'Kerala Tourism · Guidelines',
-          url: 'https://www.keralatourism.org/guidelines/',
-        },
-        {
-          title: 'Useful essentials',
-          text: 'Useful phrases: namaskāram (hello), nanni (thank you). Public toilets and luggage facilities are easiest to find at major stations and visitor sites. India commonly uses Type C/D plugs; confirm your device voltage.',
-          source: 'Bureau of Indian Standards · Plugs and sockets',
-          url: 'https://www.bis.gov.in/wp-content/uploads/2023/08/Plugs-and-Sockets-20.pdf',
-        },
-      ];
-  const sections = [
-    'Tickets & trains',
-    'Taking a taxi',
-    'Paying day to day',
-    'Local etiquette',
-    'Useful essentials',
-  ];
-  const detailFor = (title: string) => tips.find((t) => t.title === title)!;
   return (
     <Page>
       <CityPill onPress={() => router.push('/')} />
@@ -101,28 +37,32 @@ export default function GuideScreen() {
           <Text style={styles.heroMeta}>Curated visitor notes · Checked {checkedOn}</Text>
         </View>
       </View>
+      {preferences.stepFree ? (
+        <Note>Step-free preference saved. Open the access notes before planning a route.</Note>
+      ) : null}
       <SectionTitle>Getting around & local life</SectionTitle>
-      {sections.map((title, i) => {
-        const tip = detailFor(title);
-        const expanded = open === title;
+      {tips.map((tip, i) => {
+        const expanded = open === tip.id;
         return (
-          <View key={title} style={styles.tipWrap}>
+          <View key={tip.id} style={styles.tipWrap}>
             <Pressable
               accessibilityRole="button"
               accessibilityState={{ expanded }}
-              onPress={() => setOpen(expanded ? null : title)}
+              onPress={() => setOpen(expanded ? null : tip.id)}
               style={styles.tipHead}
             >
               <View style={styles.num}>
                 <Text style={styles.numText}>{String(i + 1).padStart(2, '0')}</Text>
               </View>
-              <Text style={styles.tipTitle}>{title}</Text>
+              <Text style={styles.tipTitle}>{tip.title}</Text>
               <Text style={styles.chev}>{expanded ? '−' : '+'}</Text>
             </Pressable>
             {expanded ? (
               <View style={styles.tipBody}>
-                <Text style={styles.tipText}>{tip.text}</Text>
-                <Text style={styles.source}>Source: {tip.source}</Text>
+                <Text style={styles.tipText}>{tip.body}</Text>
+                <Text style={styles.source}>
+                  {tip.source} · Reviewed {tip.checked_on}
+                </Text>
                 <Text onPress={() => void Linking.openURL(tip.url)} style={styles.link}>
                   Open source ↗
                 </Text>

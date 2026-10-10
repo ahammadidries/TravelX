@@ -13,6 +13,7 @@ import {
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { TravelProvider } from '@/state/travelContext';
 import { AuthProvider } from '@/state/AuthContext';
+import { CatalogProvider } from '@/state/CatalogContext';
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -32,7 +33,11 @@ export default function RootLayout() {
         <BottomSheetModalProvider>
           <StatusBar style="dark" />
           <AuthProvider>
-            <TravelProvider><RootNavigator /></TravelProvider>
+            <CatalogProvider>
+              <TravelProvider>
+                <RootNavigator />
+              </TravelProvider>
+            </CatalogProvider>
           </AuthProvider>
         </BottomSheetModalProvider>
       </SafeAreaProvider>

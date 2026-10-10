@@ -4,15 +4,14 @@ import {
   useCallback,
   useContext,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type PropsWithChildren,
 } from 'react';
+import { ActivityIndicator, View } from 'react-native';
 import { cities, type CityKey } from '@/data/cities';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { friendlyError, supabase } from '@/lib/supabase';
 import { useAuth } from '@/state/AuthContext';
-
 export type Preferences = {
   language: string;
   localNumber: string;
@@ -27,148 +26,181 @@ type TravelState = {
 };
 type TravelValue = TravelState & {
   city: (typeof cities)[CityKey];
+  ready: boolean;
+  syncError: string | null;
   setCity: (city: CityKey) => void;
   setPreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void;
   toggleSavedCity: (city?: CityKey) => Promise<void>;
   toggleSavedApp: (id: string) => Promise<void>;
-  ready: boolean;
+  retrySync: () => Promise<void>;
 };
 const TravelContext = createContext<TravelValue | null>(null);
-const STORAGE_KEY = 'travelx.local-pack.v1';
 const initial: TravelState = {
   cityKey: 'kozhikode',
   preferences: { language: 'English', localNumber: 'Not yet', payment: 'Both', stepFree: false },
   savedCities: [],
   savedAppIds: [],
 };
-
+function restore(value: Partial<TravelState>): TravelState {
+  return {
+    cityKey: value.cityKey === 'tokyo' ? 'tokyo' : 'kozhikode',
+    preferences: { ...initial.preferences, ...value.preferences },
+    savedCities: Array.isArray(value.savedCities)
+      ? value.savedCities.filter((x): x is CityKey => x === 'tokyo' || x === 'kozhikode')
+      : [],
+    savedAppIds: Array.isArray(value.savedAppIds)
+      ? value.savedAppIds.filter((x) => typeof x === 'string')
+      : [],
+  };
+}
 export function TravelProvider({ children }: PropsWithChildren) {
-  const { session, loading: authLoading } = useAuth();
-  const [state, setState] = useState<TravelState>(initial);
+  const { session, loading } = useAuth();
+  if (loading)
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
+      </View>
+    );
+  return (
+    <TravelSession key={session?.user.id || 'guest'} userId={session?.user.id}>
+      {children}
+    </TravelSession>
+  );
+}
+function TravelSession({ children, userId }: PropsWithChildren<{ userId?: string }>) {
+  const [state, setState] = useState(initial);
   const [ready, setReady] = useState(false);
-  const [remoteReady, setRemoteReady] = useState(false);
-  const remoteUser = useRef<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const current = useRef(initial);
+  const queue = useRef(Promise.resolve());
+  const storageKey = userId ? `travelx.pack.v2.${userId}` : 'travelx.local-pack.v1';
   useEffect(() => {
-    let alive = true;
-    void AsyncStorage.getItem(STORAGE_KEY)
-      .then((value) => {
-        if (!alive || !value) return;
-        try {
-          const stored = JSON.parse(value) as Partial<TravelState>;
-          setState((s) => ({
-            ...s,
-            ...stored,
-            cityKey: stored.cityKey && stored.cityKey in cities ? stored.cityKey : s.cityKey,
-            preferences: { ...s.preferences, ...stored.preferences },
-          }));
-        } catch {
-          void AsyncStorage.removeItem(STORAGE_KEY);
-        }
-      })
-      .finally(() => {
-        if (alive) setReady(true);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-  useEffect(() => {
-    if (ready) void AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  }, [ready, state]);
-  useEffect(() => {
-    if (!ready || authLoading) return;
-    const userId = session?.user.id || null;
-    if (!userId) {
-      remoteUser.current = null;
-      queueMicrotask(() => setRemoteReady(true));
-      return;
-    }
-    if (!isSupabaseConfigured) {
-      queueMicrotask(() => setRemoteReady(true));
-      return;
-    }
-    if (remoteUser.current === userId) return;
-    remoteUser.current = userId;
-    queueMicrotask(() => setRemoteReady(false));
     let alive = true;
     void (async () => {
-      const { data, error } = await supabase
-        .from('travelx_packs')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
-      if (!alive) return;
-      if (!error && data) {
-        const citiesInPack = (data.saved_cities || []).filter(
-          (x: string): x is CityKey => x in cities,
-        );
-        setState((s) => ({
-          ...s,
-          cityKey: citiesInPack.includes(s.cityKey) ? s.cityKey : citiesInPack[0] || s.cityKey,
-          savedCities: citiesInPack,
-          savedAppIds: (data.saved_apps || []) as string[],
-          preferences: { ...s.preferences, ...data.preferences },
-        }));
+      let next = initial;
+      try {
+        const local = await AsyncStorage.getItem(storageKey);
+        const cached = local ? JSON.parse(local) : null;
+        if (cached) next = restore(cached.state || cached);
+        if (userId && cached?.pendingSync) {
+          if (alive) setSyncError('This device has changes waiting to sync.');
+        } else if (userId) {
+          const { data, error } = await supabase
+            .from('travelx_packs')
+            .select('*')
+            .eq('user_id', userId)
+            .maybeSingle();
+          if (error) throw error;
+          if (data)
+            next = restore({
+              ...next,
+              savedCities: data.saved_cities,
+              savedAppIds: data.saved_apps,
+              preferences: data.preferences,
+            });
+          await AsyncStorage.setItem(
+            storageKey,
+            JSON.stringify({ state: next, pendingSync: false }),
+          );
+        }
+      } catch (error) {
+        if (alive) setSyncError(friendlyError(error));
       }
-      setRemoteReady(true);
+      if (alive) {
+        current.current = next;
+        setState(next);
+        setReady(true);
+      }
     })();
     return () => {
       alive = false;
     };
-  }, [ready, authLoading, session?.user.id]);
-  useEffect(() => {
-    if (!ready || !remoteReady || authLoading || !session?.user.id || !isSupabaseConfigured) return;
-    void supabase
-      .from('travelx_packs')
-      .upsert(
-        {
-          user_id: session.user.id,
-          saved_cities: state.savedCities,
-          saved_apps: state.savedAppIds,
-          preferences: state.preferences,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'user_id' },
-      );
-  }, [ready, remoteReady, authLoading, session?.user.id, state]);
-  const setCity = useCallback((city: CityKey) => setState((s) => ({ ...s, cityKey: city })), []);
-  const setPreference = useCallback(
-    <K extends keyof Preferences>(key: K, value: Preferences[K]) =>
-      setState((s) => ({ ...s, preferences: { ...s.preferences, [key]: value } })),
-    [],
-  );
-  const toggleSavedCity = useCallback(
-    async (city = state.cityKey) => {
-      setState((s) => ({
-        ...s,
-        savedCities: s.savedCities.includes(city)
-          ? s.savedCities.filter((x) => x !== city)
-          : [...s.savedCities, city],
-      }));
+  }, [storageKey, userId]);
+  const persist = useCallback(
+    (next: TravelState) => {
+      current.current = next;
+      setState(next);
+      // Serialize snapshots so a slow earlier request cannot overwrite a later change.
+      const task = queue.current
+        .catch(() => {})
+        .then(async () => {
+          await AsyncStorage.setItem(
+            storageKey,
+            JSON.stringify({ state: next, pendingSync: Boolean(userId) }),
+          );
+          if (userId) {
+            const { data } = await supabase.auth.getSession();
+            if (data.session?.user.id !== userId) return;
+            const { error } = await supabase.from('travelx_packs').upsert({
+              user_id: userId,
+              saved_cities: next.savedCities,
+              saved_apps: next.savedAppIds,
+              preferences: next.preferences,
+              updated_at: new Date().toISOString(),
+            });
+            if (error) throw error;
+            await AsyncStorage.setItem(
+              storageKey,
+              JSON.stringify({ state: next, pendingSync: false }),
+            );
+          }
+          setSyncError(null);
+        })
+        .catch((error) => {
+          setSyncError(friendlyError(error));
+          throw error;
+        });
+      queue.current = task;
+      return task;
     },
-    [state.cityKey],
+    [storageKey, userId],
   );
-  const toggleSavedApp = useCallback(async (id: string) => {
-    setState((s) => ({
-      ...s,
-      savedAppIds: s.savedAppIds.includes(id)
-        ? s.savedAppIds.filter((x) => x !== id)
-        : [...s.savedAppIds, id],
-    }));
-  }, []);
-  const value = useMemo<TravelValue>(
-    () => ({
-      ...state,
-      city: cities[state.cityKey],
-      setCity,
-      setPreference,
-      toggleSavedCity,
-      toggleSavedApp,
-      ready,
-    }),
-    [state, setCity, setPreference, toggleSavedCity, toggleSavedApp, ready],
+  const setCity = (cityKey: CityKey) => {
+    void persist({ ...current.current, cityKey }).catch(() => {});
+  };
+  const setPreference = <K extends keyof Preferences>(key: K, value: Preferences[K]) => {
+    void persist({
+      ...current.current,
+      preferences: { ...current.current.preferences, [key]: value },
+    }).catch(() => {});
+  };
+  const toggleSavedCity = (key = current.current.cityKey) =>
+    persist({
+      ...current.current,
+      savedCities: current.current.savedCities.includes(key)
+        ? current.current.savedCities.filter((x) => x !== key)
+        : [...current.current.savedCities, key],
+    });
+  const toggleSavedApp = (id: string) =>
+    persist({
+      ...current.current,
+      savedAppIds: current.current.savedAppIds.includes(id)
+        ? current.current.savedAppIds.filter((x) => x !== id)
+        : [...current.current.savedAppIds, id],
+    });
+  if (!ready)
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator />
+      </View>
+    );
+  return (
+    <TravelContext.Provider
+      value={{
+        ...state,
+        city: cities[state.cityKey],
+        ready,
+        syncError,
+        setCity,
+        setPreference,
+        toggleSavedCity,
+        toggleSavedApp,
+        retrySync: () => persist(current.current),
+      }}
+    >
+      {children}
+    </TravelContext.Provider>
   );
-  return <TravelContext.Provider value={value}>{children}</TravelContext.Provider>;
 }
 export function useTravel() {
   const value = useContext(TravelContext);
