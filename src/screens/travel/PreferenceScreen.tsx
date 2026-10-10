@@ -10,7 +10,7 @@ const items: Record<
   {
     title: string;
     subtitle: string;
-    field: 'language' | 'localNumber' | 'payment';
+    field: 'language' | 'localNumber' | 'payment' | 'stepFree';
     choices: string[];
   }
 > = {
@@ -32,13 +32,19 @@ const items: Record<
     field: 'payment',
     choices: ['Cash', 'Card', 'Both'],
   },
+  4: {
+    title: 'Need step-free access?',
+    subtitle: 'We’ll surface practical access notes where available.',
+    field: 'stepFree',
+    choices: ['Yes', 'No'],
+  },
 };
 
 export default function PreferenceScreen({
   step,
   onContinue,
 }: {
-  step: 1 | 2 | 3;
+  step: 1 | 2 | 3 | 4;
   onContinue: () => void;
 }) {
   const { preferences, setPreference } = useTravel();
@@ -50,7 +56,7 @@ export default function PreferenceScreen({
           ‹
         </Text>
         <View style={styles.track}>
-          <View style={[styles.fill, { width: `${step * 33.3}%` }]} />
+          <View style={[styles.fill, { width: `${step * 25}%` }]} />
         </View>
         <Text style={styles.skip} onPress={onContinue}>
           Skip
@@ -63,8 +69,16 @@ export default function PreferenceScreen({
             key={choice}
             dark
             label={choice}
-            selected={preferences[config.field] === choice}
-            onPress={() => setPreference(config.field, choice)}
+            selected={
+              config.field === 'stepFree'
+                ? preferences.stepFree === (choice === 'Yes')
+                : preferences[config.field] === choice
+            }
+            onPress={() =>
+              config.field === 'stepFree'
+                ? setPreference('stepFree', choice === 'Yes')
+                : setPreference(config.field, choice)
+            }
           />
         ))}
       </View>

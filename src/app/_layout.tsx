@@ -12,6 +12,7 @@ import {
 } from '@expo-google-fonts/sora';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { TravelProvider } from '@/state/travelContext';
+import { AuthProvider } from '@/state/AuthContext';
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
@@ -30,9 +31,9 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <BottomSheetModalProvider>
           <StatusBar style="dark" />
-          <TravelProvider>
-            <RootNavigator />
-          </TravelProvider>
+          <AuthProvider>
+            <TravelProvider><RootNavigator /></TravelProvider>
+          </AuthProvider>
         </BottomSheetModalProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

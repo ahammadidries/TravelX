@@ -1,5 +1,5 @@
-import { PlaceholderScreen } from '@/screens/shared/PlaceholderScreen';
+import LoginScreen from '@/screens/auth/LoginScreen';
 
 export default function LoginRoute() {
-  return <PlaceholderScreen title="Login" />;
+  return <LoginScreen />;
 }

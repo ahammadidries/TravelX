@@ -1,120 +1,324 @@
 import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { ActionButton, CityPill, Heading, Page, RowCard } from '@/components/TravelUI';
+import { router, useLocalSearchParams } from 'expo-router';
+import { Alert, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { CityPill, Heading, Note, Page } from '@/components/TravelUI';
+import { categories, localApps, type AppCategory, type LocalApp } from '@/data/apps';
+import { checkedOn } from '@/data/cities';
+import { openLink } from '@/lib/links';
 import { useTravel } from '@/state/travelContext';
 import { colors } from '@/theme/colors';
 import { fontFamily } from '@/theme/typography';
-import { router } from 'expo-router';
-
-const categories = ['Transport', 'Taxi', 'Food', 'SIM'] as const;
-type Category = (typeof categories)[number];
-type AppInfo = { icon: string; title: string; description: string };
-const appInfo: Record<string, AppInfo[][]> = {
-  Tokyo: [
-    [
-      { icon: '🚆', title: 'Transit guide', description: 'Explore rail and metro options' },
-      { icon: '🗺️', title: 'Route planner', description: 'Plan a route across the city' },
-    ],
-    [{ icon: '🚕', title: 'Taxi guide', description: 'Local taxi booking options' }],
-    [{ icon: '🍱', title: 'Food delivery', description: 'Browse local delivery services' }],
-    [{ icon: '📶', title: 'Connectivity', description: 'Compare SIM and eSIM options' }],
-  ],
-  Kozhikode: [
-    [
-      { icon: '🚌', title: 'Transit guide', description: 'Local bus and rail information' },
-      { icon: '🚆', title: 'Rail guide', description: 'Find local rail resources' },
-    ],
-    [{ icon: '🛺', title: 'Taxi guide', description: 'Taxi and auto options' }],
-    [{ icon: '🍛', title: 'Food delivery', description: 'Browse local delivery services' }],
-    [{ icon: '📶', title: 'Connectivity', description: 'Compare SIM and eSIM options' }],
-  ],
-};
 
 export default function AppsScreen() {
-  const { city } = useTravel();
-  const [category, setCategory] = useState<Category>('Transport');
+  const { city, cityKey, savedAppIds, toggleSavedApp } = useTravel();
+  const params = useLocalSearchParams<{ category?: string }>();
+  const [manualCategory, setManualCategory] = useState<AppCategory | null>(null);
+  const category =
+    manualCategory ||
+    (categories.includes(params.category as AppCategory)
+      ? (params.category as AppCategory)
+      : 'Transport');
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<LocalApp | null>(null);
   const data = useMemo(
-    () => appInfo[city.name]?.[categories.indexOf(category)] ?? [],
-    [category, city.name],
+    () =>
+      localApps.filter(
+        (x) =>
+          x.city === cityKey &&
+          x.category === category &&
+          (!query.trim() ||
+            `${x.name} ${x.purpose} ${x.tip}`.toLowerCase().includes(query.toLowerCase())),
+      ),
+    [cityKey, category, query],
   );
+  const save = async (app: LocalApp) => {
+    try {
+      await toggleSavedApp(app.id);
+    } catch {
+      Alert.alert(
+        'Saved on this device',
+        'Account sync will start when the city pack tables are installed.',
+      );
+    }
+  };
   return (
     <Page>
       <CityPill onPress={() => router.push('/')} />
-      <Heading title="Local apps" subtitle={`${city.name}, ${city.country}`} />
+      <Heading
+        title="Local apps"
+        subtitle={`${city.name}, ${city.country} · services visitors ask about most.`}
+      />
       <View style={styles.search}>
         <Text style={styles.searchIcon}>⌕</Text>
-        <Text style={styles.searchText}>Find an app or service</Text>
+        <TextInput
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Search local apps"
+          placeholderTextColor="#888895"
+          style={styles.searchInput}
+        />
+        {query ? (
+          <Text onPress={() => setQuery('')} style={styles.clear}>
+            ×
+          </Text>
+        ) : null}
       </View>
       <View style={styles.tabs}>
         {categories.map((item) => (
-          <Pressable key={item} onPress={() => setCategory(item)} style={styles.tab}>
-            <Text style={[styles.tabText, category === item && styles.tabActive]}>{item}</Text>
-            {category === item && <View style={styles.underline} />}
+          <Pressable
+            key={item}
+            onPress={() => setManualCategory(item)}
+            accessibilityRole="tab"
+            accessibilityState={{ selected: category === item }}
+            style={styles.tab}
+          >
+            <Text style={[styles.tabText, category === item && styles.tabActive]}>
+              {item === 'Connectivity' ? 'SIM & data' : item}
+            </Text>
+            {category === item ? <View style={styles.underline} /> : null}
           </Pressable>
         ))}
       </View>
-      {data.map((item) => (
-        <View key={item.title} style={styles.app}>
-          <RowCard icon={item.icon} title={item.title} detail={item.description} trailing="↗" />
-          <Text style={styles.requirements}>Illustrative listing · Provider requirements vary</Text>
-          <Pressable style={styles.link}>
-            <Text style={styles.linkText}>Provider link coming soon</Text>
-          </Pressable>
+      <Text style={styles.resultCount}>
+        {data.length} {data.length === 1 ? 'option' : 'options'} · Checked {checkedOn}
+      </Text>
+      {data.map((app) => (
+        <View key={app.id} style={styles.card}>
+          <View style={styles.cardTop}>
+            <View style={[styles.appIcon, { backgroundColor: app.color }]}>
+              <Text style={styles.initials}>{app.initials}</Text>
+            </View>
+            <View style={styles.appText}>
+              <Text style={styles.appName}>{app.name}</Text>
+              <Text style={styles.description}>{app.purpose}</Text>
+            </View>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={savedAppIds.includes(app.id) ? 'Remove saved app' : 'Save app'}
+              onPress={() => void save(app)}
+              style={styles.bookmark}
+            >
+              <Text
+                style={[styles.bookmarkText, savedAppIds.includes(app.id) && styles.bookmarkActive]}
+              >
+                {savedAppIds.includes(app.id) ? '♥' : '♡'}
+              </Text>
+            </Pressable>
+          </View>
+          <View style={styles.meta}>
+            <View style={styles.metaDot} />
+            <Text style={styles.metaText}>{app.language}</Text>
+          </View>
+          <View style={styles.buttonRow}>
+            <Pressable onPress={() => setSelected(app)} style={styles.noteButton}>
+              <Text style={styles.noteButtonText}>Visitor notes</Text>
+            </Pressable>
+            <Pressable onPress={() => void openLink(app.url)} style={styles.openButton}>
+              <Text style={styles.openButtonText}>Open official site ↗</Text>
+            </Pressable>
+          </View>
         </View>
       ))}
-      <ActionButton
-        label="Getting around basics"
-        secondary
-        onPress={() => router.push('/(main)/guide')}
-      />
+      {!data.length ? (
+        <View style={styles.empty}>
+          <Text style={styles.emptyText}>No services match that search. Try another word.</Text>
+        </View>
+      ) : null}
+      <Note>
+        Requirements and availability can vary by provider and visitor status. Last checked{' '}
+        {checkedOn}; confirm with the official provider.
+      </Note>
+      <Modal
+        transparent
+        animationType="slide"
+        visible={selected !== null}
+        onRequestClose={() => setSelected(null)}
+      >
+        <View style={styles.modalShade}>
+          <Pressable style={styles.dismiss} onPress={() => setSelected(null)} />
+          <View style={styles.sheet}>
+            <View style={styles.handle} />
+            <View style={styles.sheetHeader}>
+              <Text style={styles.sheetTitle}>Visitor notes</Text>
+              <Pressable onPress={() => setSelected(null)}>
+                <Text style={styles.close}>×</Text>
+              </Pressable>
+            </View>
+            {selected ? (
+              <>
+                <Text style={styles.selectedName}>{selected.name}</Text>
+                <Text style={styles.selectedDescription}>{selected.purpose}</Text>
+                <InfoLine label="Language" value={selected.language} />
+                <InfoLine label="Phone" value={selected.phone} />
+                <InfoLine label="Payment" value={selected.payment} />
+                <View style={styles.tip}>
+                  <Text style={styles.tipLabel}>A small local tip</Text>
+                  <Text style={styles.tipText}>{selected.tip}</Text>
+                </View>
+                <Text style={styles.source}>Provider information · Reviewed {checkedOn}</Text>
+                <Pressable onPress={() => void openLink(selected.url)} style={styles.openButton}>
+                  <Text style={styles.openButtonText}>Open provider site ↗</Text>
+                </Pressable>
+              </>
+            ) : null}
+          </View>
+        </View>
+      </Modal>
     </Page>
   );
 }
-
+function InfoLine({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.infoLine}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value}</Text>
+    </View>
+  );
+}
 const styles = StyleSheet.create({
   search: {
     height: 52,
     backgroundColor: colors.surface,
-    borderRadius: 28,
+    borderRadius: 26,
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 18,
+    paddingHorizontal: 16,
     gap: 10,
-    marginBottom: 12,
   },
-  searchIcon: { fontSize: 24, color: colors.textSecondary },
-  searchText: { color: colors.textSecondary, fontFamily: fontFamily.regular, fontSize: 14 },
-  tabs: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderColor: colors.divider,
-    marginBottom: 10,
-  },
-  tab: { flex: 1, minHeight: 46, justifyContent: 'center', alignItems: 'center' },
-  tabText: { color: colors.textSecondary, fontFamily: fontFamily.medium, fontSize: 12 },
+  searchIcon: { fontSize: 25, color: colors.textSecondary },
+  searchInput: { flex: 1, color: colors.textPrimary, fontFamily: fontFamily.regular, fontSize: 14 },
+  clear: { fontSize: 22, color: colors.textSecondary },
+  tabs: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.divider, marginTop: 14 },
+  tab: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  tabText: { color: colors.textSecondary, fontFamily: fontFamily.medium, fontSize: 11 },
   tabActive: { color: colors.accent },
   underline: {
     position: 'absolute',
     bottom: -1,
+    width: '80%',
     height: 2,
-    width: '74%',
     backgroundColor: colors.accent,
   },
-  app: { marginBottom: 12 },
-  requirements: {
-    marginTop: 8,
-    marginLeft: 2,
+  resultCount: {
+    marginVertical: 12,
     color: colors.textSecondary,
     fontSize: 11,
+    fontFamily: fontFamily.medium,
+  },
+  card: {
+    backgroundColor: '#FFF',
+    paddingVertical: 14,
+    borderBottomColor: colors.divider,
+    borderBottomWidth: 1,
+  },
+  cardTop: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  appIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  initials: { color: '#FFF', fontFamily: fontFamily.bold, fontSize: 15 },
+  appText: { flex: 1, gap: 4 },
+  appName: { fontSize: 15, color: colors.textPrimary, fontFamily: fontFamily.semibold },
+  description: {
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.textSecondary,
     fontFamily: fontFamily.regular,
   },
-  link: {
-    alignSelf: 'flex-start',
-    marginTop: 10,
+  bookmark: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
+  bookmarkText: { fontSize: 21, color: colors.textSecondary },
+  bookmarkActive: { color: colors.accent },
+  meta: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 11, marginLeft: 56 },
+  metaDot: { width: 6, height: 6, borderRadius: 4, backgroundColor: '#5A9D7E' },
+  metaText: { color: colors.textSecondary, fontSize: 10, fontFamily: fontFamily.regular },
+  buttonRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginLeft: 56,
+    marginTop: 11,
+  },
+  noteButton: {
+    paddingVertical: 8,
+    paddingHorizontal: 11,
+    backgroundColor: colors.surface,
+    borderRadius: 15,
+  },
+  noteButtonText: { color: colors.textSecondary, fontFamily: fontFamily.medium, fontSize: 11 },
+  openButton: {
     paddingVertical: 8,
     paddingHorizontal: 12,
     backgroundColor: colors.accentMuted,
     borderRadius: 16,
   },
-  linkText: { color: colors.accent, fontFamily: fontFamily.semibold, fontSize: 12 },
+  openButtonText: { color: colors.accent, fontFamily: fontFamily.semibold, fontSize: 11 },
+  empty: { padding: 28, backgroundColor: colors.surface, borderRadius: 18 },
+  emptyText: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.regular,
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  modalShade: { flex: 1, justifyContent: 'flex-end', backgroundColor: '#0005' },
+  dismiss: { flex: 1 },
+  sheet: {
+    backgroundColor: '#FFF',
+    borderTopLeftRadius: 26,
+    borderTopRightRadius: 26,
+    padding: 23,
+    paddingBottom: 34,
+  },
+  handle: {
+    width: 36,
+    height: 4,
+    borderRadius: 3,
+    backgroundColor: '#D0D0D5',
+    alignSelf: 'center',
+    marginBottom: 15,
+  },
+  sheetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  sheetTitle: { fontFamily: fontFamily.semibold, color: colors.textPrimary, fontSize: 17 },
+  close: { fontSize: 27, color: colors.textSecondary },
+  selectedName: {
+    fontFamily: fontFamily.bold,
+    fontSize: 21,
+    color: colors.textPrimary,
+    marginTop: 10,
+  },
+  selectedDescription: {
+    fontFamily: fontFamily.regular,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textSecondary,
+    marginTop: 5,
+    marginBottom: 14,
+  },
+  infoLine: { paddingVertical: 11, borderBottomColor: colors.divider, borderBottomWidth: 1 },
+  infoLabel: {
+    fontFamily: fontFamily.semibold,
+    fontSize: 10,
+    letterSpacing: 0.5,
+    color: colors.textSecondary,
+    textTransform: 'uppercase',
+  },
+  infoValue: {
+    fontFamily: fontFamily.regular,
+    fontSize: 13,
+    lineHeight: 19,
+    color: colors.textPrimary,
+    marginTop: 4,
+  },
+  tip: { backgroundColor: colors.accentMuted, borderRadius: 14, padding: 13, marginTop: 14 },
+  tipLabel: { color: colors.accent, fontFamily: fontFamily.semibold, fontSize: 11 },
+  tipText: {
+    color: colors.textPrimary,
+    fontFamily: fontFamily.regular,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 4,
+  },
+  source: { fontSize: 10, color: colors.textSecondary, marginVertical: 13 },
 });
