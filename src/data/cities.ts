@@ -19,11 +19,6 @@ export const cities = {
     currency: 'JPY · Japanese yen',
     language: 'Japanese',
     color: '#E8E6FF',
-    meetingPlaces: [
-      { name: 'Ueno Park main entrance', latitude: 35.7111, longitude: 139.7742 },
-      { name: 'Yoyogi Park Harajuku gate', latitude: 35.6705, longitude: 139.7023 },
-      { name: 'Tokyo Station Marunouchi square', latitude: 35.6812, longitude: 139.7646 },
-    ],
   },
   kozhikode: {
     key: 'kozhikode' as const,
@@ -44,11 +39,6 @@ export const cities = {
     currency: 'INR · Indian rupee',
     language: 'Malayalam',
     color: '#E2F1E9',
-    meetingPlaces: [
-      { name: 'Kozhikode Beach, main promenade', latitude: 11.2614, longitude: 75.7675 },
-      { name: 'Mananchira Square entrance', latitude: 11.2548, longitude: 75.781 },
-      { name: 'SM Street, north entrance', latitude: 11.2506, longitude: 75.7812 },
-    ],
   },
 };
 export type City = (typeof cities)[CityKey];

@@ -31,7 +31,7 @@ export function friendlyError(error: unknown): string {
       ? String(error.message)
       : 'Something went wrong. Please try again.';
   if (message.includes('schema cache') || message.includes('does not exist'))
-    return 'Together is being set up. Please try again shortly.';
+    return 'This service is being set up. Please try again shortly.';
   if (/fetch|network|timeout/i.test(message))
     return 'Unable to connect. Check your connection and try again.';
   return message;

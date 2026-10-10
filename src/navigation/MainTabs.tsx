@@ -38,15 +38,6 @@ export function MainTabs() {
         }}
       />
       <Tabs.Screen
-        name="together"
-        options={{
-          title: 'Together',
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons name={focused ? 'people' : 'people-outline'} color={color} size={23} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="saved"
         options={{
           title: 'Saved',

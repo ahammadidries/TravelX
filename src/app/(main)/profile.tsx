@@ -27,7 +27,7 @@ function ProfileEditor() {
   const save = async () => {
     if (!session || busy) return;
     if (!name.trim()) {
-      setNotice('Add the name you want other travelers to see.');
+      setNotice('Add a name for your TravelX account.');
       return;
     }
     setBusy(true);
@@ -50,10 +50,7 @@ function ProfileEditor() {
   };
   return (
     <Page>
-      <Heading
-        title="A little about you"
-        subtitle="Your name helps people recognize you in Together."
-      />
+      <Heading title="A little about you" subtitle="Manage your TravelX account details." />
       {session ? (
         <>
           <Text style={styles.label}>DISPLAY NAME</Text>
@@ -87,10 +84,7 @@ function ProfileEditor() {
             placeholder="What do you like doing when you travel?"
             placeholderTextColor={colors.textSecondary}
           />
-          <Note>
-            {bio.length}/300 · These details are visible to signed-in travelers. Your email stays
-            private.
-          </Note>
+          <Note>{bio.length}/300 · A short note for your TravelX account.</Note>
           {notice || error ? (
             <Text accessibilityRole="alert" style={styles.notice}>
               {notice || error}

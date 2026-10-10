@@ -87,14 +87,14 @@ export default function LoginScreen() {
           subtitle={
             session
               ? session.user.email || 'Signed in'
-              : 'Save city packs and plan meetups with other travelers.'
+              : 'Keep your city packs and useful apps synced across devices.'
           }
         />
         {session ? (
           <>
             <View style={styles.notice}>
               <Text style={styles.noticeText}>
-                You’re signed in. Saved city packs and Together activities sync to your account.
+                You’re signed in. Your saved city packs and apps sync to your account.
               </Text>
             </View>
             <ActionButton
@@ -173,7 +173,7 @@ export default function LoginScreen() {
             </Pressable>
             <View style={styles.privacy}>
               <Text style={styles.privacyText}>
-                Your email is used for account access. We never display it to other travelers.
+                Your email is used for account access and is not displayed in the app catalog.
               </Text>
             </View>
           </>
