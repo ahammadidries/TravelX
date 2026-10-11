@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
+import { Image } from 'expo-image';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { Alert } from '@/lib/notify';
-import { CityPill, Heading, Note, Page } from '@/components/TravelUI';
+import { Brand, CityPill, Heading, Note, Page, ProfileBadge } from '@/components/TravelUI';
 import { categories, type AppCategory, type LocalApp } from '@/data/apps';
+import { appRankings } from '@/data/appRankings';
+import { appLogos } from '@/data/appLogos';
 import { useCatalog } from '@/state/CatalogContext';
 import { checkedOn } from '@/data/cities';
 import { openLink } from '@/lib/links';
@@ -39,32 +42,35 @@ function AppsScreen({
   );
   const data = useMemo(
     () =>
-      localApps.filter(
-        (x) =>
-          x.city === cityKey &&
-          x.category === category &&
-          (!query.trim() ||
-            `${x.name} ${x.purpose} ${x.tip}`.toLowerCase().includes(query.toLowerCase())),
-      ),
+      localApps
+        .filter(
+          (x) =>
+            x.city === cityKey &&
+            x.category === category &&
+            (!query.trim() ||
+              `${x.name} ${x.purpose} ${x.tip}`.toLowerCase().includes(query.toLowerCase())),
+        )
+        .sort(
+          (first, second) =>
+            (appRankings[first.id]?.order ?? 999) - (appRankings[second.id]?.order ?? 999),
+        ),
     [cityKey, category, query, localApps],
   );
   const save = async (app: LocalApp) => {
     try {
       await toggleSavedApp(app.id);
     } catch {
-      Alert.alert(
-        'Could not sync your changes',
-        'Open Saved to retry when your connection is ready.',
-      );
+      Alert.alert('Could not save your changes', 'Open Saved to retry saving on this device.');
     }
   };
   return (
     <Page>
+      <View style={styles.top}>
+        <Brand />
+        <ProfileBadge />
+      </View>
       <CityPill onPress={() => router.push('/')} />
-      <Heading
-        title="Local apps"
-        subtitle={`${city.name}, ${city.country} · services visitors ask about most.`}
-      />
+      <Heading title="local apps" subtitle={`${city.name}, ${city.country}`} />
       <View style={styles.search}>
         <Text style={styles.searchIcon}>⌕</Text>
         <TextInput
@@ -80,7 +86,12 @@ function AppsScreen({
           </Text>
         ) : null}
       </View>
-      <View style={styles.tabs}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabs}
+        accessibilityRole="tablist"
+      >
         {categories.map((item) => (
           <Pressable
             key={item}
@@ -89,26 +100,65 @@ function AppsScreen({
             accessibilityState={{ selected: category === item }}
             style={styles.tab}
           >
+            <Text style={[styles.tabIcon, category === item && styles.tabActive]}>
+              {item === 'Transport'
+                ? '▦'
+                : item === 'Taxi'
+                  ? '▱'
+                  : item === 'Food'
+                    ? '♨'
+                    : item === 'Connectivity'
+                      ? '⌁'
+                      : item === 'Hotels'
+                        ? '⌂'
+                        : '•'}
+            </Text>
             <Text style={[styles.tabText, category === item && styles.tabActive]}>
               {item === 'Connectivity' ? 'SIM & data' : item}
             </Text>
             {category === item ? <View style={styles.underline} /> : null}
           </Pressable>
         ))}
-      </View>
+      </ScrollView>
       <Text style={styles.resultCount}>
         {data.length} {data.length === 1 ? 'option' : 'options'} ·{' '}
         {source === 'supabase' ? 'Updated city catalog' : 'Offline city catalog'}
       </Text>
+      <Text style={styles.rankingNote}>
+        Picks use city availability, visitor fit and service features—not live speed scores or app
+        ratings.
+      </Text>
       {data.map((app) => (
         <View key={app.id} style={styles.card}>
           <View style={styles.cardTop}>
-            <View style={[styles.appIcon, { backgroundColor: app.color }]}>
-              <Text style={styles.initials}>{app.initials}</Text>
-            </View>
+            {appLogos[app.id] ? (
+              <View style={styles.logoCanvas}>
+                <View style={[styles.logoFallback, { backgroundColor: app.color }]}>
+                  <Text style={styles.initials}>{app.initials}</Text>
+                </View>
+                <Image
+                  source={appLogos[app.id]}
+                  style={styles.appLogo}
+                  contentFit="contain"
+                  cachePolicy="disk"
+                  accessibilityLabel={`${app.name} app logo`}
+                />
+              </View>
+            ) : (
+              <View style={[styles.appIcon, { backgroundColor: app.color }]}>
+                <Text style={styles.initials}>{app.initials}</Text>
+              </View>
+            )}
             <View style={styles.appText}>
               <Text style={styles.appName}>{app.name}</Text>
               <Text style={styles.description}>{app.purpose}</Text>
+              {appRankings[app.id] ? (
+                <View style={styles.rankBadge}>
+                  <Text style={styles.rankText}>
+                    #{appRankings[app.id]?.rank} · {appRankings[app.id]?.group}
+                  </Text>
+                </View>
+              ) : null}
             </View>
             <Pressable
               accessibilityRole="button"
@@ -169,6 +219,12 @@ function AppsScreen({
                 <InfoLine label="Language" value={selected.language} />
                 <InfoLine label="Phone" value={selected.phone} />
                 <InfoLine label="Payment" value={selected.payment} />
+                {appRankings[selected.id] ? (
+                  <InfoLine
+                    label={`TravelX pick #${appRankings[selected.id]?.rank} · ${appRankings[selected.id]?.group}`}
+                    value={appRankings[selected.id]?.reason ?? ''}
+                  />
+                ) : null}
                 <View style={styles.tip}>
                   <Text style={styles.tipLabel}>A small local tip</Text>
                   <Text style={styles.tipText}>{selected.tip}</Text>
@@ -196,6 +252,7 @@ function InfoLine({ label, value }: { label: string; value: string }) {
   );
 }
 const styles = StyleSheet.create({
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   search: {
     height: 52,
     backgroundColor: colors.surface,
@@ -208,22 +265,37 @@ const styles = StyleSheet.create({
   searchIcon: { fontSize: 25, color: colors.textSecondary },
   searchInput: { flex: 1, color: colors.textPrimary, fontFamily: fontFamily.regular, fontSize: 14 },
   clear: { fontSize: 22, color: colors.textSecondary },
-  tabs: { flexDirection: 'row', borderBottomWidth: 1, borderColor: colors.divider, marginTop: 14 },
-  tab: { flex: 1, minHeight: 44, alignItems: 'center', justifyContent: 'center' },
+  tabs: { flexDirection: 'row', gap: 8, marginTop: 14, paddingBottom: 2 },
+  tab: {
+    minWidth: 88,
+    paddingHorizontal: 10,
+    minHeight: 46,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E5E6EF',
+    borderRadius: 16,
+  },
   tabText: { color: colors.textSecondary, fontFamily: fontFamily.medium, fontSize: 11 },
+  tabIcon: { color: colors.textSecondary, fontSize: 16 },
   tabActive: { color: colors.accent },
   underline: {
-    position: 'absolute',
-    bottom: -1,
-    width: '80%',
-    height: 2,
-    backgroundColor: colors.accent,
+    display: 'none',
   },
   resultCount: {
     marginVertical: 12,
     color: colors.textSecondary,
     fontSize: 11,
     fontFamily: fontFamily.medium,
+  },
+  rankingNote: {
+    color: colors.textSecondary,
+    fontFamily: fontFamily.regular,
+    fontSize: 10,
+    lineHeight: 15,
+    marginBottom: 8,
   },
   card: {
     backgroundColor: '#FFF',
@@ -239,6 +311,23 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  logoCanvas: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: colors.divider,
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  logoFallback: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  appLogo: { width: 42, height: 42 },
   initials: { color: '#FFF', fontFamily: fontFamily.bold, fontSize: 15 },
   appText: { flex: 1, gap: 4 },
   appName: { fontSize: 15, color: colors.textPrimary, fontFamily: fontFamily.semibold },
@@ -248,6 +337,15 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     fontFamily: fontFamily.regular,
   },
+  rankBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 3,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 10,
+    backgroundColor: colors.accentMuted,
+  },
+  rankText: { color: colors.accent, fontFamily: fontFamily.semibold, fontSize: 9 },
   bookmark: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   bookmarkText: { fontSize: 21, color: colors.textSecondary },
   bookmarkActive: { color: colors.accent },

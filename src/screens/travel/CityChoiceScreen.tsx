@@ -2,7 +2,7 @@ import { router } from 'expo-router';
 import { Image } from 'expo-image';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { ActionButton, Brand, Heading, Page } from '@/components/TravelUI';
+import { ActionButton, Brand, Heading, Page, ProfileBadge } from '@/components/TravelUI';
 import { cities, type CityKey } from '@/data/cities';
 import { useTravel } from '@/state/travelContext';
 import { colors } from '@/theme/colors';
@@ -13,11 +13,11 @@ export default function CityChoiceScreen() {
   const [selected, setSelected] = useState<CityKey>(cityKey);
   return (
     <Page>
-      <Brand />
-      <Heading
-        title="Where are you going?"
-        subtitle="A little local knowledge makes a new city feel familiar."
-      />
+      <View style={styles.top}>
+        <Brand />
+        <ProfileBadge />
+      </View>
+      <Heading title="where are you going?" subtitle="Your city essentials, one step at a time." />
       <View style={styles.cards}>
         {Object.values(cities).map((place) => (
           <Pressable
@@ -29,12 +29,11 @@ export default function CityChoiceScreen() {
           >
             <Image source={place.photo} style={styles.photo} contentFit="cover" transition={180} />
             <View style={styles.scrim} />
-            <Text style={styles.flag}>{place.flag}</Text>
             <View style={styles.copy}>
-              <Text style={styles.name}>{place.name}</Text>
-              <Text style={styles.location}>
-                {place.region}, {place.country}
+              <Text style={styles.name}>
+                {place.name}, {place.country}
               </Text>
+              <Text style={styles.location}>{place.tagline}</Text>
             </View>
             {selected === place.key ? (
               <View style={styles.tick}>
@@ -44,24 +43,28 @@ export default function CityChoiceScreen() {
           </Pressable>
         ))}
       </View>
-      <Text style={styles.tagline}>{cities[selected].tagline}</Text>
       <View style={styles.bottom}>
         <ActionButton
-          label="Explore this city"
+          label={`Explore ${cities[selected].name}  →`}
           onPress={() => {
             setCity(selected);
             router.replace('/(main)/city');
           }}
         />
-        <Text style={styles.privacy}>You can change cities at any time.</Text>
+        <Pressable onPress={() => router.push('/(onboarding)/step-1')} style={styles.setup}>
+          <Text style={styles.setupText}>⚙ Set travel preferences</Text>
+          <Text style={styles.setupArrow}>›</Text>
+        </Pressable>
+        <Text style={styles.privacy}>Two cities. One easy start.</Text>
       </View>
     </Page>
   );
 }
 const styles = StyleSheet.create({
+  top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   cards: { gap: 14, marginTop: 4 },
   card: {
-    height: 190,
+    height: 166,
     borderRadius: 22,
     overflow: 'hidden',
     borderWidth: 2,
@@ -70,27 +73,21 @@ const styles = StyleSheet.create({
   },
   cardSelected: { borderColor: colors.accent },
   photo: { ...StyleSheet.absoluteFill },
-  scrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.13)' },
-  flag: {
-    position: 'absolute',
-    top: 14,
-    left: 14,
-    overflow: 'hidden',
-    borderRadius: 18,
-    backgroundColor: '#FFFFFFE8',
-    paddingHorizontal: 11,
-    paddingVertical: 7,
-    fontSize: 17,
-  },
-  copy: { position: 'absolute', bottom: 17, left: 18 },
+  scrim: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(14,12,36,0.19)' },
+  copy: { position: 'absolute', top: 19, left: 20, right: 62 },
   name: {
-    color: '#FFF',
+    color: '#101012',
     fontFamily: fontFamily.bold,
-    fontSize: 23,
-    textShadowColor: '#0008',
-    textShadowRadius: 6,
+    fontSize: 21,
+    lineHeight: 26,
   },
-  location: { color: '#FFFFFFE8', fontFamily: fontFamily.medium, fontSize: 13, marginTop: 3 },
+  location: {
+    color: '#383848',
+    fontFamily: fontFamily.regular,
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 4,
+  },
   tick: {
     position: 'absolute',
     top: 15,
@@ -103,13 +100,20 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   tickText: { color: '#FFF', fontFamily: fontFamily.bold },
-  tagline: {
-    marginTop: 17,
-    color: colors.textSecondary,
-    fontFamily: fontFamily.regular,
-    fontSize: 13,
-  },
   bottom: { marginTop: 'auto', paddingTop: 28 },
+  setup: {
+    marginTop: 15,
+    height: 51,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    borderWidth: 1,
+    borderColor: '#DED9FF',
+    backgroundColor: '#F7F5FF',
+    alignItems: 'center',
+    flexDirection: 'row',
+  },
+  setupText: { flex: 1, color: '#4F3EE8', fontFamily: fontFamily.semibold, fontSize: 14 },
+  setupArrow: { color: '#4F3EE8', fontSize: 26 },
   privacy: {
     marginTop: 12,
     textAlign: 'center',

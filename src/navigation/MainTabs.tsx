@@ -49,7 +49,6 @@ export function MainTabs() {
       <Tabs.Screen name="guide" options={{ href: null }} />
       <Tabs.Screen name="map" options={{ href: null }} />
       <Tabs.Screen name="trips" options={{ href: null }} />
-      <Tabs.Screen name="profile" options={{ href: null }} />
     </Tabs>
   );
 }

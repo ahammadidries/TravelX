@@ -35,13 +35,25 @@ await writeFile(
   new URL('../supabase/migrations/202610110003_seed_catalog.sql', import.meta.url),
   seed,
 );
+await writeFile(
+  new URL('../supabase/migrations/202610110005_catalog_refresh.sql', import.meta.url),
+  seed,
+);
+await writeFile(
+  new URL('../supabase/migrations/202610110007_catalog_refresh.sql', import.meta.url),
+  seed,
+);
 // One atomic, rerunnable setup file. Applied phases are recorded independently.
 let setup =
   '-- Run this whole file in the Supabase SQL Editor. Safe to rerun.\nbegin;\ncreate schema if not exists travelx_private;\nrevoke all on schema travelx_private from public,anon,authenticated;\ncreate table if not exists travelx_private.migrations(version text primary key);\n';
 for (const name of [
   '202610110001_travelx',
   '202610110002_catalog_and_activity_api',
+  '202610110004_app_categories',
+  '202610110006_catalog_categories',
   '202610110003_seed_catalog',
+  '202610110005_catalog_refresh',
+  '202610110007_catalog_refresh',
 ]) {
   let sql = await readFile(new URL(`../supabase/migrations/${name}.sql`, import.meta.url), 'utf8');
   sql = sql.replace(/^begin;\s*$/gm, '').replace(/^commit;\s*$/gm, '');

@@ -12,7 +12,6 @@ import {
 } from '@expo-google-fonts/sora';
 import { RootNavigator } from '@/navigation/RootNavigator';
 import { TravelProvider } from '@/state/travelContext';
-import { AuthProvider } from '@/state/AuthContext';
 import { CatalogProvider } from '@/state/CatalogContext';
 
 export default function RootLayout() {
@@ -32,13 +31,11 @@ export default function RootLayout() {
       <SafeAreaProvider>
         <BottomSheetModalProvider>
           <StatusBar style="dark" />
-          <AuthProvider>
-            <CatalogProvider>
-              <TravelProvider>
-                <RootNavigator />
-              </TravelProvider>
-            </CatalogProvider>
-          </AuthProvider>
+          <CatalogProvider>
+            <TravelProvider>
+              <RootNavigator />
+            </TravelProvider>
+          </CatalogProvider>
         </BottomSheetModalProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

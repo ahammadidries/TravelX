@@ -43,7 +43,7 @@ async function denied(run) {
 }
 let event;
 await asUser(null, async () => {
-  assert.equal((await db.query('select count(*)::int as n from travelx_apps')).rows[0].n, 13);
+  assert.equal((await db.query('select count(*)::int as n from travelx_apps')).rows[0].n, 35);
   assert.equal((await db.query('select count(*)::int as n from travelx_guides')).rows[0].n, 13);
   await denied(() => db.exec('delete from travelx_apps'));
   await denied(() => db.exec('select * from travelx_packs'));

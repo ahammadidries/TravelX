@@ -10,8 +10,6 @@ import {
 } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { cities, type CityKey } from '@/data/cities';
-import { friendlyError, supabase } from '@/lib/supabase';
-import { useAuth } from '@/state/AuthContext';
 export type Preferences = {
   language: string;
   localNumber: string;
@@ -27,12 +25,12 @@ type TravelState = {
 type TravelValue = TravelState & {
   city: (typeof cities)[CityKey];
   ready: boolean;
-  syncError: string | null;
+  storageError: string | null;
   setCity: (city: CityKey) => void;
   setPreference: <K extends keyof Preferences>(key: K, value: Preferences[K]) => void;
   toggleSavedCity: (city?: CityKey) => Promise<void>;
   toggleSavedApp: (id: string) => Promise<void>;
-  retrySync: () => Promise<void>;
+  retrySave: () => Promise<void>;
 };
 const TravelContext = createContext<TravelValue | null>(null);
 const initial: TravelState = {
@@ -54,26 +52,12 @@ function restore(value: Partial<TravelState>): TravelState {
   };
 }
 export function TravelProvider({ children }: PropsWithChildren) {
-  const { session, loading } = useAuth();
-  if (loading)
-    return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator />
-      </View>
-    );
-  return (
-    <TravelSession key={session?.user.id || 'guest'} userId={session?.user.id}>
-      {children}
-    </TravelSession>
-  );
-}
-function TravelSession({ children, userId }: PropsWithChildren<{ userId?: string }>) {
   const [state, setState] = useState(initial);
   const [ready, setReady] = useState(false);
-  const [syncError, setSyncError] = useState<string | null>(null);
+  const [storageError, setStorageError] = useState<string | null>(null);
   const current = useRef(initial);
   const queue = useRef(Promise.resolve());
-  const storageKey = userId ? `travelx.pack.v2.${userId}` : 'travelx.local-pack.v1';
+  const storageKey = 'travelx.local-pack.v1';
   useEffect(() => {
     let alive = true;
     void (async () => {
@@ -82,29 +66,8 @@ function TravelSession({ children, userId }: PropsWithChildren<{ userId?: string
         const local = await AsyncStorage.getItem(storageKey);
         const cached = local ? JSON.parse(local) : null;
         if (cached) next = restore(cached.state || cached);
-        if (userId && cached?.pendingSync) {
-          if (alive) setSyncError('This device has changes waiting to sync.');
-        } else if (userId) {
-          const { data, error } = await supabase
-            .from('travelx_packs')
-            .select('*')
-            .eq('user_id', userId)
-            .maybeSingle();
-          if (error) throw error;
-          if (data)
-            next = restore({
-              ...next,
-              savedCities: data.saved_cities,
-              savedAppIds: data.saved_apps,
-              preferences: data.preferences,
-            });
-          await AsyncStorage.setItem(
-            storageKey,
-            JSON.stringify({ state: next, pendingSync: false }),
-          );
-        }
-      } catch (error) {
-        if (alive) setSyncError(friendlyError(error));
+      } catch {
+        if (alive) setStorageError('Could not load saved items from this device.');
       }
       if (alive) {
         current.current = next;
@@ -115,7 +78,7 @@ function TravelSession({ children, userId }: PropsWithChildren<{ userId?: string
     return () => {
       alive = false;
     };
-  }, [storageKey, userId]);
+  }, [storageKey]);
   const persist = useCallback(
     (next: TravelState) => {
       current.current = next;
@@ -124,36 +87,17 @@ function TravelSession({ children, userId }: PropsWithChildren<{ userId?: string
       const task = queue.current
         .catch(() => {})
         .then(async () => {
-          await AsyncStorage.setItem(
-            storageKey,
-            JSON.stringify({ state: next, pendingSync: Boolean(userId) }),
-          );
-          if (userId) {
-            const { data } = await supabase.auth.getSession();
-            if (data.session?.user.id !== userId) return;
-            const { error } = await supabase.from('travelx_packs').upsert({
-              user_id: userId,
-              saved_cities: next.savedCities,
-              saved_apps: next.savedAppIds,
-              preferences: next.preferences,
-              updated_at: new Date().toISOString(),
-            });
-            if (error) throw error;
-            await AsyncStorage.setItem(
-              storageKey,
-              JSON.stringify({ state: next, pendingSync: false }),
-            );
-          }
-          setSyncError(null);
+          await AsyncStorage.setItem(storageKey, JSON.stringify({ state: next }));
+          setStorageError(null);
         })
         .catch((error) => {
-          setSyncError(friendlyError(error));
+          setStorageError('Could not save changes on this device. Please try again.');
           throw error;
         });
       queue.current = task;
       return task;
     },
-    [storageKey, userId],
+    [storageKey],
   );
   const setCity = (cityKey: CityKey) => {
     void persist({ ...current.current, cityKey }).catch(() => {});
@@ -190,12 +134,12 @@ function TravelSession({ children, userId }: PropsWithChildren<{ userId?: string
         ...state,
         city: cities[state.cityKey],
         ready,
-        syncError,
+        storageError,
         setCity,
         setPreference,
         toggleSavedCity,
         toggleSavedApp,
-        retrySync: () => persist(current.current),
+        retrySave: () => persist(current.current),
       }}
     >
       {children}

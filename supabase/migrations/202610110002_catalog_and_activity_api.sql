@@ -3,7 +3,7 @@ create table public.travelx_apps (
   id text primary key,
   city text not null check (city in ('tokyo','kozhikode')),
   name text not null,
-  category text not null check (category in ('Transport','Taxi','Food','Connectivity')),
+  category text not null check (category in ('Transport','Taxi','Food','Groceries','Hotels','Connectivity','Utilities')),
   initials text not null, color text not null,
   purpose text not null, url text not null check (url like 'https://%'),
   language text not null, phone text not null, payment text not null, tip text not null,

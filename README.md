@@ -1,60 +1,133 @@
 # TravelX
 
-TravelX is a mobile-first Expo app that helps visitors feel ready for everyday life in **Tokyo, Japan** and **Kozhikode, Kerala**. It includes city starter packs, visitor-focused local app listings, practical travel notes, and saved essentials. There is no AI assistant or trip planner.
+TravelX is a mobile guide for visitors in **Tokyo, Japan** and **Kozhikode, Kerala, India**. It helps people find trustworthy local apps, learn everyday essentials, follow arrival guidance, and save city packs for later.
 
-## Run the app
+The app works without an account. Its navigation is focused on three areas: **City**, **Apps**, and **Saved**.
 
-1. Install dependencies with `npm ci`.
-2. Copy `.env.example` to `.env.local` and add the Supabase project URL and **publishable** key. Never put a Supabase secret or service-role key in an Expo app.
-3. Run **all of `supabase/setup.sql`** in your Supabase SQL Editor. It installs the schema, access policies, signup profiles and researched city catalog in one transaction. It is safe to rerun, including if the original migration was already installed.
-4. Use `npm run web` to open a laptop browser preview, or `npm start` to launch the app in Expo Go.
+## What it includes
 
-Email/password auth uses the Supabase Auth service. Email confirmation follows the project’s Auth settings. City guides and app information are available without an account; accounts are optional and enable syncing saved city packs and apps.
+- City selection for Tokyo and Kozhikode, with destination photography.
+- Arrival guidance for connectivity, airport transport, local payments, and getting around.
+- Ranked visitor app catalogs covering transit, taxis, food, groceries, hotels, SIM/data, and utilities.
+- Practical guides for transport, payments, dining customs, useful phrases, public toilets, luggage storage, and plugs and charging.
+- Japanese and Malayalam phrase references for the two supported cities.
+- Device-local saved apps, preferences, and offline city packs.
+- A public Supabase catalog with bundled offline fallback content.
 
-## Main features
+## Tech stack
 
-- Tokyo and Kozhikode destination selection with destination photography.
-- A four-step travel setup for language, local phone number, payment preference, and step-free access.
-- Local app suggestions grouped by transport, taxi, food, and connectivity, with provider links and visitor notes.
-- Expandable, source-linked practical guidance for transport, taxis, payments, etiquette, phrases, toilets, luggage and charging.
-- Locally saved city packs and apps, with optional Supabase account sync.
+- [Expo](https://expo.dev/) SDK 57 and React Native
+- TypeScript
+- Expo Router
+- Supabase for the public city catalog
+- Expo Application Services (EAS) for Android builds
 
-The main navigation contains City, Apps and Saved.
+## Quick start
 
-## Backend setup and verification
+### Prerequisites
 
-The app reads `travelx_apps` and `travelx_guides` from Supabase, with bundled content available offline. The initial catalog contains 13 provider entries and 13 source-linked guide entries across the two cities. Visitors can read the catalog but cannot edit it. Update it through the SQL Editor as a project administrator.
+- Node.js 20 or later
+- npm
+- Expo Go on a phone for development, or a web browser for the web preview
 
-Paste the complete `supabase/setup.sql` into the SQL Editor and run it. After it succeeds, restart the app to fetch the hosted catalog. To verify the deployed connection, sign up with two accounts, confirm their email addresses, save a city pack and confirm it appears on another device signed into the same account. Confirm that a different account cannot see those saved items.
+### Install and run
 
-Saved packs use per-account local storage and ordered remote writes. Unsynced edits survive restarting the app; the Saved screen offers a retry. Guest bookmarks remain separate from account bookmarks.
-
-Run `npm run backend:prepare` to rebuild SQL after editing the bundled catalog. For an already deployed database, apply the regenerated `202610110003_seed_catalog.sql` to update its catalog; the setup ledger skips previously applied phases.
-
-`npm run backend:test` executes the setup twice in local PostgreSQL (PGlite) and checks signup profiles, catalog permissions, account isolation and historical migration compatibility. It does not verify Supabase email delivery or HTTP access; those require the deployed project.
-
-Together has been removed from the app, including its routes, map components and native map dependency. Historical SQL migrations and their regression tests are retained for existing database compatibility; the app no longer calls the activity or chat APIs. This change does not delete existing server data.
-
-## Project layout
-
-```text
-src/app/                 Expo Router screens and layouts
-src/components/           Reusable UI components
-src/data/                 Tokyo and Kozhikode city/app content
-src/lib/                  Supabase and external-link helpers
-src/screens/              Auth and destination screens
-src/state/                Auth and travel-pack state
-src/theme/                Design tokens
-assets/cities/             Destination photography and license credits
-supabase/migrations/       Database schema, policies and RPCs
+```bash
+git clone https://github.com/YOUR_GITHUB_USERNAME/travelx.git
+cd travelx
+npm ci
 ```
 
-City photography attribution and license links are included in the city guide and [assets/cities/ATTRIBUTION.md](assets/cities/ATTRIBUTION.md). App and local guidance entries link to official providers or public-information sources; confirm current details with each provider.
+Copy the example environment file before starting the app:
 
-## Checks
+```powershell
+Copy-Item .env.example .env.local
+```
 
-- `npx tsc --noEmit`
-- `npx expo lint`
-- `npx expo export --platform web --max-workers 1`
+Add your Supabase URL and **publishable** key to `.env.local`, then run one of these commands:
 
-Run `npx expo-doctor` to review Expo configuration and package compatibility.
+```bash
+npm start       # Expo Go development server
+npm run web     # web preview
+npm run android # opens Expo Go on a connected Android device
+```
+
+> Never place a Supabase secret key or service-role key in an Expo app or commit it to GitHub. `.env.local` is ignored by Git.
+
+## Supabase catalog setup
+
+TravelX bundles its essential data, so the app remains useful if Supabase is not configured. Connecting Supabase enables hosted catalog updates.
+
+1. Create a Supabase project.
+2. Copy `.env.example` to `.env.local` and fill in the public values.
+3. In the Supabase SQL Editor, run the complete [supabase/setup.sql](supabase/setup.sql) file.
+4. Restart the app.
+
+The setup file creates the public read-only catalog and seeds **35 app providers** plus **13 guides**. Visitors can read the catalog; catalog updates are made by a project administrator in Supabase.
+
+After changing bundled catalog data, regenerate the SQL seed data with:
+
+```bash
+npm run backend:prepare
+```
+
+## Build an Android APK
+
+The project includes a preview EAS profile that produces an installable APK. Sign in to Expo, then build:
+
+```bash
+npx eas-cli@latest login
+npx eas-cli@latest build --platform android --profile preview
+```
+
+When the build completes, Expo provides a QR code and an Android download page. The `preview` profile in [eas.json](eas.json) builds an APK; the production profile is configured for store distribution and versioning.
+
+For a cloud build that connects to Supabase, set these public environment variables in the EAS **preview** environment:
+
+```text
+EXPO_PUBLIC_SUPABASE_URL
+EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+```
+
+## Project structure
+
+```text
+src/
+  app/                 Expo Router routes and layouts
+  components/          Reusable mobile UI components
+  data/                City content, ranked apps, logos, and essentials
+  lib/                 Supabase and external-link helpers
+  screens/             City and arrival-flow screens
+  state/               Public catalog and device-local saved state
+  theme/               Design tokens
+assets/
+  cities/              Destination images and attribution
+  apps/                Local app logo assets
+supabase/
+  migrations/          Schema, public catalog policies, and seed data
+  setup.sql            One-file SQL setup for Supabase
+scripts/               Catalog preparation and backend tests
+```
+
+## Quality checks
+
+Run these before opening a pull request:
+
+```bash
+npm run check
+npm run backend:test
+npx expo export --platform web --max-workers 1
+npx expo-doctor
+```
+
+## Content and attribution
+
+City image attribution and license links are listed in [assets/cities/ATTRIBUTION.md](assets/cities/ATTRIBUTION.md). Local app listings and guide entries link to official providers or public-information sources; always verify time-sensitive travel information with the provider.
+
+## Privacy
+
+TravelX does not require sign-in. Saved packs and preferences remain on the current device and do not sync between devices. The hosted Supabase catalog is public, read-only data.
+
+## License
+
+See [LICENSE](LICENSE).

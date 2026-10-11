@@ -2,137 +2,77 @@ import { router } from 'expo-router';
 import { Image } from 'expo-image';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Alert } from '@/lib/notify';
-import { useCatalog } from '@/state/CatalogContext';
-import {
-  ActionButton,
-  Brand,
-  CityPill,
-  Heading,
-  Page,
-  RowCard,
-  SectionTitle,
-} from '@/components/TravelUI';
+import { ActionButton, Brand, CityPill, Page, ProfileBadge, RowCard } from '@/components/TravelUI';
 import { useTravel } from '@/state/travelContext';
-import { useAuth } from '@/state/AuthContext';
-import { colors } from '@/theme/colors';
 import { fontFamily } from '@/theme/typography';
 
 export default function CityHomeScreen() {
   const { city, savedCities, toggleSavedCity } = useTravel();
-  const { session } = useAuth();
-  const { apps } = useCatalog();
   const saved = savedCities.includes(city.key);
   const togglePack = async () => {
     try {
       await toggleSavedCity();
     } catch {
-      Alert.alert(
-        'Could not sync your changes',
-        'Open Saved to retry when your connection is ready.',
-      );
+      Alert.alert('Could not save your changes', 'Open Saved to retry saving on this device.');
     }
   };
+
   return (
     <Page>
       <View style={styles.top}>
-        <Brand />
-        <View style={styles.headerActions}>
-          <CityPill onPress={() => router.push('/')} />
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Account"
-            onPress={() => router.push(session ? '/(main)/profile' : '/(auth)/login')}
-            style={styles.account}
-          >
-            <Text style={styles.accountText}>{session?.user.email?.[0]?.toUpperCase() ?? '○'}</Text>
-          </Pressable>
-        </View>
+        <Brand compact />
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Edit your travel setup"
+          onPress={() => router.push('/(onboarding)/step-1')}
+        >
+          <ProfileBadge small />
+        </Pressable>
       </View>
+      <CityPill onPress={() => router.push('/')} />
+
       <View style={styles.hero}>
+        <View style={styles.heroCopy}>
+          <Text style={styles.heroTitle}>hello, {city.name}.</Text>
+          <Text style={styles.heroSubtitle}>Feel at home, anywhere.</Text>
+        </View>
         <View style={styles.heroPhoto}>
           <Image source={city.photo} style={styles.photo} contentFit="cover" transition={220} />
-          <View style={styles.overlay} />
-          <View style={styles.heroText}>
-            <Text style={styles.localName}>{city.localName}</Text>
-            <Text style={styles.tag}>{city.name.toUpperCase()} CITY PACK</Text>
-          </View>
         </View>
-        <Heading title={`${city.greeting}, ${city.name}`} subtitle={city.tagline} />
       </View>
-      <ActionButton
-        label="I just landed"
-        onPress={() => router.push('/(main)/guide?section=airport')}
-      />
-      <View style={styles.section}>
-        <SectionTitle
-          trailing={
-            <Text style={styles.smallLink} onPress={() => router.push('/(main)/guide')}>
-              See all
-            </Text>
-          }
-        >
-          Start here
-        </SectionTitle>
-        <RowCard
-          icon="↗"
-          title="Get connected"
-          detail="SIM, eSIM and visitor requirements"
-          onPress={() => router.push('/(main)/apps?category=Connectivity')}
-        />
-        <RowCard
-          icon="🚆"
-          title="From the airport"
-          detail="Plan your first trip into the city"
-          onPress={() => router.push('/(main)/guide?section=airport')}
-        />
-        <RowCard
-          icon="¥"
-          title="Payments & tickets"
-          detail="What to prepare before you go"
-          onPress={() => router.push('/(main)/guide?section=payments')}
-        />
-        <RowCard
-          icon="⌖"
-          title="Transport basics"
-          detail="Tickets, taxis and local etiquette"
-          onPress={() => router.push('/(main)/guide?section=transport')}
-        />
-      </View>
-      <View style={styles.section}>
-        <SectionTitle>Explore your city</SectionTitle>
+
+      <ActionButton compact label="I just landed  →" onPress={() => router.push('/arrival')} />
+
+      <View style={styles.links}>
         <RowCard
           icon="▦"
+          iconName="phone-portrait-outline"
           title="Local apps"
-          detail={`${apps.filter((app) => app.city === city.key).length} useful services for ${city.name}`}
+          detail="Find the right tools"
           onPress={() => router.push('/(main)/apps')}
+          compact
         />
         <RowCard
           icon="⌖"
-          title="City guide"
-          detail="Local transport, payments and customs"
+          iconName="map-outline"
+          title="How things work"
+          detail="Transport, payments & local life"
           onPress={() => router.push('/(main)/guide')}
+          compact
         />
         <RowCard
           icon="♡"
-          title="Save city pack"
-          detail="Keep the essentials close at hand"
-          onPress={() => void togglePack()}
+          iconName="heart-outline"
+          title={saved ? 'City pack saved' : 'Save city pack'}
+          detail={
+            saved ? 'Your essentials are ready in Saved' : 'Keep the essentials on your device'
+          }
+          onPress={() => {
+            void togglePack();
+            router.push('/(main)/saved');
+          }}
           trailing={saved ? '✓' : '＋'}
-        />
-      </View>
-      <View style={styles.section}>
-        <SectionTitle>Quick essentials</SectionTitle>
-        <RowCard
-          icon="⚙"
-          title="Your travel setup"
-          detail="Language, phone, payments and access preferences"
-          onPress={() => router.push('/(onboarding)/step-1')}
-        />
-        <RowCard
-          icon="🏛️"
-          title="About & information sources"
-          detail="Check where each local tip comes from"
-          onPress={() => router.push('/(main)/guide?section=sources')}
+          compact
         />
       </View>
     </Page>
@@ -140,43 +80,23 @@ export default function CityHomeScreen() {
 }
 
 const styles = StyleSheet.create({
-  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
-  headerActions: { flexDirection: 'row', alignItems: 'flex-start', gap: 8 },
-  account: {
-    marginTop: -5,
-    width: 40,
-    height: 40,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.accentMuted,
+  top: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  hero: { gap: 8 },
+  heroCopy: { gap: 3 },
+  heroTitle: {
+    color: '#121214',
+    fontFamily: fontFamily.bold,
+    fontSize: 29,
+    lineHeight: 35,
+    letterSpacing: -0.9,
   },
-  accountText: { color: colors.accent, fontFamily: fontFamily.semibold, fontSize: 14 },
-  hero: { gap: 18 },
+  heroSubtitle: { color: '#6B6B76', fontFamily: fontFamily.regular, fontSize: 12 },
   heroPhoto: {
-    height: 166,
-    borderRadius: 22,
+    height: 142,
+    borderRadius: 18,
     overflow: 'hidden',
     backgroundColor: '#DFF2F3',
   },
   photo: { ...StyleSheet.absoluteFill },
-  overlay: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(0,0,0,0.18)' },
-  heroText: { position: 'absolute', left: 17, bottom: 18, gap: 6 },
-  localName: {
-    color: '#FFF',
-    fontFamily: fontFamily.bold,
-    fontSize: 24,
-    textShadowColor: '#0009',
-    textShadowRadius: 8,
-  },
-  tag: {
-    color: '#FFF',
-    fontFamily: fontFamily.semibold,
-    fontSize: 10,
-    letterSpacing: 1.1,
-    textShadowColor: '#0009',
-    textShadowRadius: 8,
-  },
-  smallLink: { color: colors.accent, fontFamily: fontFamily.semibold, fontSize: 12 },
-  section: { marginTop: 18 },
+  links: { marginTop: 12 },
 });

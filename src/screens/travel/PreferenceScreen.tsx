@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import { ActionButton, ChoiceRow, Heading, Page } from '@/components/TravelUI';
+import { ActionButton, ChoiceRow, CityPill, Heading, Page } from '@/components/TravelUI';
 import { useTravel } from '@/state/travelContext';
 import { colors } from '@/theme/colors';
 import { fontFamily } from '@/theme/typography';
@@ -40,6 +40,18 @@ const items: Record<
   },
 };
 
+const choiceDetails: Record<string, { icon: string; detail: string }> = {
+  English: { icon: '🌐', detail: 'Read in English' },
+  Japanese: { icon: '🇯🇵', detail: 'Japanese' },
+  Malayalam: { icon: '🇮🇳', detail: 'Malayalam' },
+  Yes: { icon: '📱', detail: 'I already have a local SIM or eSIM.' },
+  'Not yet': { icon: '📲', detail: 'I’ll get a local SIM or eSIM in the city.' },
+  Cash: { icon: '💵', detail: 'Local currency and cash tips.' },
+  Card: { icon: '💳', detail: 'International cards and contactless options.' },
+  Both: { icon: '💶', detail: 'Use cash and card for more flexibility.' },
+  No: { icon: '⚙️', detail: 'Show all available routes.' },
+};
+
 export default function PreferenceScreen({
   step,
   onContinue,
@@ -58,17 +70,18 @@ export default function PreferenceScreen({
         <View style={styles.track}>
           <View style={[styles.fill, { width: `${step * 25}%` }]} />
         </View>
-        <Text style={styles.skip} onPress={onContinue}>
-          Skip
-        </Text>
+        <Text style={styles.stepCount}>{step} / 4</Text>
       </View>
       <View style={styles.content}>
-        <Heading title={config.title} subtitle={config.subtitle} light />
+        <Heading title={config.title.toLowerCase()} subtitle={config.subtitle} light />
+        <CityPill dark onPress={() => router.replace('/')} />
         {config.choices.map((choice) => (
           <ChoiceRow
             key={choice}
             dark
             label={choice}
+            icon={choiceDetails[choice]?.icon}
+            detail={choiceDetails[choice]?.detail}
             selected={
               config.field === 'stepFree'
                 ? preferences.stepFree === (choice === 'Yes')
@@ -84,13 +97,16 @@ export default function PreferenceScreen({
       </View>
       <View style={styles.footer}>
         <ActionButton label="Continue" onPress={onContinue} />
+        <Text onPress={onContinue} style={styles.skipFooter}>
+          Skip
+        </Text>
       </View>
     </Page>
   );
 }
 
 const styles = StyleSheet.create({
-  progressLine: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 46 },
+  progressLine: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 36 },
   back: {
     height: 42,
     width: 42,
@@ -105,7 +121,14 @@ const styles = StyleSheet.create({
   },
   track: { height: 4, borderRadius: 3, backgroundColor: '#303035', flex: 1, overflow: 'hidden' },
   fill: { height: 4, backgroundColor: colors.accent },
-  skip: { color: '#A5A5AE', fontFamily: fontFamily.medium, fontSize: 14 },
+  stepCount: { color: '#C2C1D4', fontFamily: fontFamily.medium, fontSize: 14 },
   content: { flex: 1 },
   footer: { marginTop: 'auto', paddingBottom: 10 },
+  skipFooter: {
+    color: '#9E95FF',
+    fontFamily: fontFamily.semibold,
+    fontSize: 14,
+    textAlign: 'center',
+    marginTop: 20,
+  },
 });

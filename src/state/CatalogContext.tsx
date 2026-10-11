@@ -29,9 +29,22 @@ export function CatalogProvider({ children }: PropsWithChildren) {
         setCatalog({ ...fallback, loading: false });
         return;
       }
+      const hostedApps = (apps.data || []) as LocalApp[];
+      const mergedApps = new Map(localApps.map((app) => [app.id, app]));
+      for (const hostedApp of hostedApps) {
+        // The bundled catalog is the current, reviewed baseline. Supabase may add entries,
+        // but must not make an existing app card lose its required visitor information.
+        mergedApps.set(hostedApp.id, { ...hostedApp, ...mergedApps.get(hostedApp.id) });
+      }
+      const hostedGuides = (guides.data || []) as CityGuide[];
+      const mergedGuides = new Map(cityGuides.map((guide) => [guide.id, guide]));
+      for (const hostedGuide of hostedGuides) {
+        // Keep every built-in guide reachable when a project has a partial database seed.
+        mergedGuides.set(hostedGuide.id, { ...hostedGuide, ...mergedGuides.get(hostedGuide.id) });
+      }
       setCatalog({
-        apps: (apps.data || []) as LocalApp[],
-        guides: (guides.data || []) as CityGuide[],
+        apps: [...mergedApps.values()],
+        guides: [...mergedGuides.values()],
         source: 'supabase',
         loading: false,
       });
